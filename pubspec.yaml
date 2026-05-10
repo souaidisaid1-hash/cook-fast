@@ -1,0 +1,71 @@
+name: cook_fast
+description: "CookFast — Ton chef IA personnel"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State management
+  flutter_riverpod: ^2.6.1
+
+  # Navigation
+  go_router: ^14.6.3
+
+  # Backend
+  supabase_flutter: ^2.9.0
+
+  # Local storage
+  hive_flutter: ^1.1.0
+  path_provider: ^2.1.5
+
+  # AI
+  google_generative_ai: ^0.4.6
+
+  # HTTP
+  http: ^1.2.2
+
+  # Env
+  flutter_dotenv: ^5.2.1
+
+  # Camera & Media
+  image_picker: ^1.1.2
+  mobile_scanner: ^6.0.0
+
+  # Voice
+  speech_to_text: ^7.0.0
+  flutter_tts: ^4.2.1
+
+  # Notifications
+  flutter_local_notifications: ^18.0.1
+
+  # UI & Animations
+  lottie: ^3.3.1
+  cached_network_image: ^3.4.1
+  shimmer: ^3.0.0
+  fl_chart: ^0.70.2
+
+  # Utils
+  share_plus: ^10.1.2
+  uuid: ^4.5.1
+  intl: ^0.20.2
+  url_launcher: ^6.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - .env
+    - assets/animations/
+    - assets/images/
+    - lib/data/recipes.json
