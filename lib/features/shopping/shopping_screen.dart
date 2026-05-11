@@ -28,10 +28,10 @@ class _ShoppingScreenState extends ConsumerState<ShoppingScreen> {
     final isDark = ref.watch(themeProvider);
     final items = ref.watch(shoppingProvider);
     final notifier = ref.read(shoppingProvider.notifier);
-    final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
+    final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
     final textColor = isDark ? AppColors.textDark : AppColors.textLight;
     final subColor = isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
-    final cardColor = isDark ? AppColors.darkCard : AppColors.lightCard;
+    final cardColor = isDark ? AppColors.darkCard : Colors.white;
 
     final byCategory = notifier.byCategory;
     final unchecked = notifier.uncheckedCount;
@@ -66,11 +66,29 @@ class _ShoppingScreenState extends ConsumerState<ShoppingScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Liste de courses', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textColor)),
-                        const SizedBox(height: 2),
-                        Text(
-                          items.isEmpty ? 'Liste vide' : '$unchecked article${unchecked > 1 ? 's' : ''} restant${unchecked > 1 ? 's' : ''}',
-                          style: TextStyle(fontSize: 13, color: subColor),
+                        Row(
+                          children: [
+                            Container(
+                              width: 4, height: 22,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [AppColors.primary, AppColors.yellow],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text('Liste de courses', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: textColor)),
+                          ],
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 14),
+                          child: Text(
+                            items.isEmpty ? 'Liste vide' : '$unchecked article${unchecked > 1 ? 's' : ''} restant${unchecked > 1 ? 's' : ''}',
+                            style: TextStyle(fontSize: 12, color: subColor),
+                          ),
                         ),
                       ],
                     ),
@@ -129,14 +147,26 @@ class _ShoppingScreenState extends ConsumerState<ShoppingScreen> {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: items.isEmpty ? 0 : checkedCount / items.length,
-                        backgroundColor: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                        valueColor: const AlwaysStoppedAnimation(AppColors.green),
-                        minHeight: 6,
-                      ),
+                    Stack(
+                      children: [
+                        Container(
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        FractionallySizedBox(
+                          widthFactor: items.isEmpty ? 0 : checkedCount / items.length,
+                          child: Container(
+                            height: 8,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(colors: [AppColors.green, Color(0xFF27AE60)]),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -394,12 +424,12 @@ class _CategorySection extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(16, 6, 16, 0),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),

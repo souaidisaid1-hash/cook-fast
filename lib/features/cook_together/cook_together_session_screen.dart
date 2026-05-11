@@ -100,20 +100,34 @@ class _State extends State<CookTogetherSessionScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.darkBg,
         iconTheme: const IconThemeData(color: AppColors.textDark),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        elevation: 0,
+        title: Row(
           children: [
-            Text(recipe.title,
-                style: const TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w700, fontSize: 15),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
-            Row(
-              children: [
-                const Text('👥 Code : ', style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 11)),
-                Text(widget.args.code,
-                    style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w700,
-                        letterSpacing: 2)),
-              ],
+            Container(
+              width: 4, height: 20,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF4A90D9), AppColors.purple], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(recipe.title,
+                      style: const TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w700, fontSize: 15),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  Row(
+                    children: [
+                      const Text('👥 Code : ', style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 11)),
+                      Text(widget.args.code,
+                          style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 2)),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),

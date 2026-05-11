@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
+import '../../shared/providers/app_providers.dart';
 import '../../shared/services/supabase_service.dart';
 import 'cook_together_session_screen.dart';
 
 const _emojis = ['👨‍🍳', '👩‍🍳', '🧑', '👨', '👩', '🧔', '👱', '🧒', '👦', '👧'];
 
-class CookTogetherJoinScreen extends StatefulWidget {
+class CookTogetherJoinScreen extends ConsumerStatefulWidget {
   const CookTogetherJoinScreen({super.key});
 
   @override
-  State<CookTogetherJoinScreen> createState() => _State();
+  ConsumerState<CookTogetherJoinScreen> createState() => _State();
 }
 
-class _State extends State<CookTogetherJoinScreen> {
+class _State extends ConsumerState<CookTogetherJoinScreen> {
   final _codeCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
   String _emoji = '🧑';
@@ -64,15 +66,32 @@ class _State extends State<CookTogetherJoinScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = ref.watch(themeProvider);
+    final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
+    final textColor = isDark ? AppColors.textDark : AppColors.textLight;
+    final subColor = isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
     final navBar = MediaQuery.of(context).viewPadding.bottom;
     final keyboard = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
-      backgroundColor: AppColors.darkBg,
+      backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: AppColors.darkBg,
-        iconTheme: const IconThemeData(color: AppColors.textDark),
-        title: const Text('Rejoindre une session', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w700)),
+        backgroundColor: bg,
+        iconTheme: IconThemeData(color: textColor),
+        elevation: 0,
+        title: Row(
+          children: [
+            Container(
+              width: 4, height: 20,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [AppColors.blue, Color(0xFF2980B9)], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text('Rejoindre une session', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 17)),
+          ],
+        ),
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + keyboard + navBar),
@@ -86,14 +105,14 @@ class _State extends State<CookTogetherJoinScreen> {
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: AppColors.blue.withValues(alpha: 0.3)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Text('💡', style: TextStyle(fontSize: 20)),
-                  SizedBox(width: 10),
+                  const Text('💡', style: TextStyle(fontSize: 20)),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Demande le code à l\'hôte de la session et rejoins sa cuisine en temps réel.',
-                      style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 13, height: 1.4),
+                      style: TextStyle(color: subColor, fontSize: 13, height: 1.4),
                     ),
                   ),
                 ],
@@ -101,23 +120,23 @@ class _State extends State<CookTogetherJoinScreen> {
             ),
             const SizedBox(height: 28),
 
-            const Text('Code de session', style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+            Text('Code de session', style: TextStyle(color: subColor, fontSize: 13, fontWeight: FontWeight.w500)),
             const SizedBox(height: 8),
             TextField(
               controller: _codeCtrl,
-              style: const TextStyle(color: AppColors.textDark, fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: 6),
+              style: TextStyle(color: textColor, fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: 6),
               textAlign: TextAlign.center,
               textCapitalization: TextCapitalization.characters,
               maxLength: 6,
               decoration: InputDecoration(
                 counterText: '',
                 hintText: 'ABCDEF',
-                hintStyle: TextStyle(color: AppColors.darkBorder, fontSize: 24, letterSpacing: 6),
+                hintStyle: TextStyle(color: isDark ? AppColors.darkBorder : AppColors.lightBorder, fontSize: 24, letterSpacing: 6),
                 filled: true,
-                fillColor: AppColors.darkCard,
+                fillColor: isDark ? AppColors.darkCard : Colors.white,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: AppColors.darkBorder),
+                  borderSide: BorderSide(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
@@ -127,7 +146,7 @@ class _State extends State<CookTogetherJoinScreen> {
             ),
             const SizedBox(height: 24),
 
-            const Text('Ton avatar', style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+            Text('Ton avatar', style: TextStyle(color: subColor, fontSize: 13, fontWeight: FontWeight.w500)),
             const SizedBox(height: 10),
             SizedBox(
               height: 52,
@@ -145,7 +164,7 @@ class _State extends State<CookTogetherJoinScreen> {
                       width: 48,
                       height: 48,
                       decoration: BoxDecoration(
-                        color: sel ? AppColors.primary.withValues(alpha: 0.2) : AppColors.darkCard,
+                        color: sel ? AppColors.primary.withValues(alpha: 0.2) : (isDark ? AppColors.darkCard : const Color(0xFFF5F2EE)),
                         shape: BoxShape.circle,
                         border: Border.all(color: sel ? AppColors.primary : Colors.transparent, width: 2),
                       ),
@@ -159,12 +178,12 @@ class _State extends State<CookTogetherJoinScreen> {
 
             TextField(
               controller: _nameCtrl,
-              style: const TextStyle(color: AppColors.textDark),
+              style: TextStyle(color: textColor),
               textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Ton prénom',
-                labelStyle: TextStyle(color: AppColors.textDarkSecondary),
-                prefixIcon: Icon(Icons.person_outline, color: AppColors.textDarkSecondary),
+                labelStyle: TextStyle(color: subColor),
+                prefixIcon: Icon(Icons.person_outline, color: subColor),
               ),
             ),
 
@@ -175,19 +194,22 @@ class _State extends State<CookTogetherJoinScreen> {
 
             const SizedBox(height: 32),
 
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _loading ? null : _join,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.blue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            GestureDetector(
+              onTap: _loading ? null : _join,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  gradient: _loading ? null : const LinearGradient(colors: [AppColors.blue, Color(0xFF2980B9)]),
+                  color: _loading ? (isDark ? AppColors.darkBorder : AppColors.lightBorder) : null,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: _loading ? [] : [BoxShadow(color: AppColors.blue.withValues(alpha: 0.35), blurRadius: 16, offset: const Offset(0, 6))],
                 ),
-                child: _loading
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text('Rejoindre la session', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                child: Center(
+                  child: _loading
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('Rejoindre la session', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                ),
               ),
             ),
           ],

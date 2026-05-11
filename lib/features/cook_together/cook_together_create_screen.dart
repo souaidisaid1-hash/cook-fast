@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/recipe.dart';
+import '../../shared/providers/app_providers.dart';
 import '../../shared/services/supabase_service.dart';
 import 'cook_together_session_screen.dart';
 
 const _emojis = ['👨‍🍳', '👩‍🍳', '🧑', '👨', '👩', '🧔', '👱', '🧒', '👦', '👧'];
 
-class CookTogetherCreateScreen extends StatefulWidget {
+class CookTogetherCreateScreen extends ConsumerStatefulWidget {
   final Recipe recipe;
   const CookTogetherCreateScreen({super.key, required this.recipe});
 
   @override
-  State<CookTogetherCreateScreen> createState() => _State();
+  ConsumerState<CookTogetherCreateScreen> createState() => _State();
 }
 
-class _State extends State<CookTogetherCreateScreen> {
+class _State extends ConsumerState<CookTogetherCreateScreen> {
   final _nameCtrl = TextEditingController();
   String _emoji = '👨‍🍳';
   bool _loading = false;
@@ -71,32 +73,50 @@ class _State extends State<CookTogetherCreateScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = ref.watch(themeProvider);
+    final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
+    final textColor = isDark ? AppColors.textDark : AppColors.textLight;
+
     return Scaffold(
-      backgroundColor: AppColors.darkBg,
+      backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: AppColors.darkBg,
-        iconTheme: const IconThemeData(color: AppColors.textDark),
-        title: const Text('Cuisiner ensemble 👥', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w700)),
+        backgroundColor: bg,
+        iconTheme: IconThemeData(color: textColor),
+        elevation: 0,
+        title: Row(
+          children: [
+            Container(
+              width: 4, height: 20,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF4A90D9), AppColors.purple], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text('Cuisiner ensemble 👥', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 17)),
+          ],
+        ),
       ),
       body: SafeArea(
-        child: _code == null ? _buildForm() : _buildLobby(),
+        child: _code == null ? _buildForm(isDark, textColor) : _buildLobby(isDark, textColor),
       ),
     );
   }
 
-  Widget _buildForm() {
+  Widget _buildForm(bool isDark, Color textColor) {
+    final subColor = isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Recipe card
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.darkCard,
+              color: isDark ? AppColors.darkCard : Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.06), blurRadius: 10, offset: const Offset(0, 3))],
             ),
             child: Row(
               children: [
@@ -106,11 +126,9 @@ class _State extends State<CookTogetherCreateScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(widget.recipe.title,
-                          style: const TextStyle(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.w700)),
+                      Text(widget.recipe.title, style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
                       if (widget.recipe.category != null)
-                        Text(widget.recipe.category!,
-                            style: const TextStyle(color: AppColors.textDarkSecondary, fontSize: 12)),
+                        Text(widget.recipe.category!, style: TextStyle(color: subColor, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -119,7 +137,7 @@ class _State extends State<CookTogetherCreateScreen> {
           ),
           const SizedBox(height: 28),
 
-          const Text('Ton avatar', style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+          Text('Ton avatar', style: TextStyle(color: subColor, fontSize: 13, fontWeight: FontWeight.w500)),
           const SizedBox(height: 10),
           SizedBox(
             height: 52,
@@ -137,7 +155,7 @@ class _State extends State<CookTogetherCreateScreen> {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: sel ? AppColors.primary.withValues(alpha: 0.2) : AppColors.darkCard,
+                      color: sel ? AppColors.primary.withValues(alpha: 0.2) : (isDark ? AppColors.darkCard : const Color(0xFFF5F2EE)),
                       shape: BoxShape.circle,
                       border: Border.all(color: sel ? AppColors.primary : Colors.transparent, width: 2),
                     ),
@@ -151,12 +169,12 @@ class _State extends State<CookTogetherCreateScreen> {
 
           TextField(
             controller: _nameCtrl,
-            style: const TextStyle(color: AppColors.textDark),
+            style: TextStyle(color: textColor),
             textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Ton prénom',
-              labelStyle: TextStyle(color: AppColors.textDarkSecondary),
-              prefixIcon: Icon(Icons.person_outline, color: AppColors.textDarkSecondary),
+              labelStyle: TextStyle(color: subColor),
+              prefixIcon: Icon(Icons.person_outline, color: subColor),
             ),
           ),
           const SizedBox(height: 8),
@@ -169,19 +187,22 @@ class _State extends State<CookTogetherCreateScreen> {
 
           const SizedBox(height: 32),
 
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _loading ? null : _create,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          GestureDetector(
+            onTap: _loading ? null : _create,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                gradient: _loading ? null : const LinearGradient(colors: [AppColors.primary, AppColors.yellow]),
+                color: _loading ? (isDark ? AppColors.darkBorder : AppColors.lightBorder) : null,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: _loading ? [] : [BoxShadow(color: AppColors.primary.withValues(alpha: 0.35), blurRadius: 16, offset: const Offset(0, 6))],
               ),
-              child: _loading
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Créer la session', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              child: Center(
+                child: _loading
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Créer la session', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+              ),
             ),
           ),
         ],
@@ -189,12 +210,11 @@ class _State extends State<CookTogetherCreateScreen> {
     );
   }
 
-  Widget _buildLobby() {
+  Widget _buildLobby(bool isDark, Color textColor) {
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
         children: [
-          // Code display
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -205,15 +225,13 @@ class _State extends State<CookTogetherCreateScreen> {
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: const Color(0xFFFF6B35).withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
             ),
             child: Column(
               children: [
                 const Text('Code de session', style: TextStyle(color: Colors.white70, fontSize: 14)),
                 const SizedBox(height: 8),
-                Text(
-                  _code!,
-                  style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: 8),
-                ),
+                Text(_code!, style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: 8)),
                 const SizedBox(height: 12),
                 GestureDetector(
                   onTap: () {
@@ -240,7 +258,6 @@ class _State extends State<CookTogetherCreateScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Participants live
           Expanded(
             child: StreamBuilder(
               stream: SupabaseService.streamParticipants(_sessionId!),
@@ -249,8 +266,7 @@ class _State extends State<CookTogetherCreateScreen> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Participants (${participants.length})',
-                        style: const TextStyle(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.w600)),
+                    Text('Participants (${participants.length})', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 12),
                     Expanded(
                       child: ListView.builder(
@@ -261,16 +277,16 @@ class _State extends State<CookTogetherCreateScreen> {
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: AppColors.darkCard,
+                              color: isDark ? AppColors.darkCard : Colors.white,
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: AppColors.darkBorder),
+                              border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.05), blurRadius: 8, offset: const Offset(0, 2))],
                             ),
                             child: Row(
                               children: [
                                 Text(p['emoji'] as String? ?? '🧑', style: const TextStyle(fontSize: 22)),
                                 const SizedBox(width: 12),
-                                Text(p['name'] as String? ?? '',
-                                    style: const TextStyle(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.w600)),
+                                Text(p['name'] as String? ?? '', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w600)),
                                 const Spacer(),
                                 const Text('Prêt ✓', style: TextStyle(color: AppColors.green, fontSize: 12, fontWeight: FontWeight.w500)),
                               ],
@@ -286,17 +302,23 @@ class _State extends State<CookTogetherCreateScreen> {
           ),
           const SizedBox(height: 16),
 
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _start,
-              icon: const Text('🍳', style: TextStyle(fontSize: 18)),
-              label: const Text('Démarrer la cuisson', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          GestureDetector(
+            onTap: _start,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [AppColors.primary, AppColors.yellow]),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.35), blurRadius: 16, offset: const Offset(0, 6))],
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('🍳', style: TextStyle(fontSize: 18)),
+                  SizedBox(width: 8),
+                  Text('Démarrer la cuisson', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                ],
               ),
             ),
           ),

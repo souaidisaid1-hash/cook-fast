@@ -4,10 +4,12 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/theme/app_theme.dart';
+import '../../shared/models/fridge_item.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/models/recipe.dart';
 import '../../shared/services/gemini_service.dart';
 import '../../shared/services/meal_db_service.dart';
+import '../../shared/services/notification_service.dart';
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -42,70 +44,131 @@ class _FridgeScreenState extends ConsumerState<FridgeScreen> {
       isScrollControlled: true,
       backgroundColor: isDark ? AppColors.darkCard : AppColors.lightCard,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                  borderRadius: BorderRadius.circular(2),
+      builder: (ctx) {
+        DateTime? selectedExpiry;
+        return StatefulBuilder(
+          builder: (ctx, setModalState) => Padding(
+            padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text('Ajouter un ingrédient', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: textColor)),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _addController,
-              autofocus: true,
-              style: TextStyle(color: textColor),
-              textCapitalization: TextCapitalization.sentences,
-              decoration: InputDecoration(
-                hintText: 'Ex: Tomates, Poulet, Farine…',
-                hintStyle: TextStyle(color: subColor),
-                filled: true,
-                fillColor: isDark ? AppColors.darkBg : AppColors.lightBg,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                prefixIcon: const Icon(Icons.kitchen_rounded, color: AppColors.primary),
-              ),
-              onSubmitted: (val) {
-                _doAdd(val);
-                Navigator.pop(ctx);
-              },
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  _doAdd(_addController.text);
-                  Navigator.pop(ctx);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                const SizedBox(height: 16),
+                Text('Ajouter un ingrédient', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: textColor)),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _addController,
+                  autofocus: true,
+                  style: TextStyle(color: textColor),
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    hintText: 'Ex: Tomates, Poulet, Farine…',
+                    hintStyle: TextStyle(color: subColor),
+                    filled: true,
+                    fillColor: isDark ? AppColors.darkBg : AppColors.lightBg,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    prefixIcon: const Icon(Icons.kitchen_rounded, color: AppColors.primary),
+                  ),
+                  onSubmitted: (val) {
+                    _doAdd(val, expiryDate: selectedExpiry);
+                    Navigator.pop(ctx);
+                  },
                 ),
-                child: const Text('Ajouter', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              ),
+                const SizedBox(height: 10),
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: ctx,
+                      initialDate: selectedExpiry ?? DateTime.now().add(const Duration(days: 3)),
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                      helpText: 'Date d\'expiration',
+                    );
+                    if (picked != null) setModalState(() => selectedExpiry = picked);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkBg : AppColors.lightBg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: selectedExpiry != null ? AppColors.yellow : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                        width: selectedExpiry != null ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.calendar_today_rounded, size: 18,
+                            color: selectedExpiry != null ? AppColors.yellow : subColor),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            selectedExpiry != null
+                                ? 'Expire le ${_formatDate(selectedExpiry!)}'
+                                : 'Date d\'expiration (optionnel)',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: selectedExpiry != null ? AppColors.yellow : subColor,
+                            ),
+                          ),
+                        ),
+                        if (selectedExpiry != null)
+                          GestureDetector(
+                            onTap: () => setModalState(() => selectedExpiry = null),
+                            child: Icon(Icons.close_rounded, size: 16, color: subColor),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      _doAdd(_addController.text, expiryDate: selectedExpiry);
+                      Navigator.pop(ctx);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Ajouter', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  void _doAdd(String val) {
+  void _doAdd(String val, {DateTime? expiryDate}) {
     final trimmed = val.trim();
     if (trimmed.isEmpty) return;
-    ref.read(fridgeProvider.notifier).add(trimmed);
+    ref.read(fridgeProvider.notifier).add(trimmed, expiryDate: expiryDate);
+    _scheduleExpiryAlerts();
   }
+
+  void _scheduleExpiryAlerts() {
+    final items = ref.read(fridgeProvider);
+    NotificationService.scheduleExpiryAlerts(items);
+  }
+
+  String _formatDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
   // ── Photo → Gemini Vision ─────────────────────────────────────────────────
 
@@ -288,8 +351,8 @@ class _FridgeScreenState extends ConsumerState<FridgeScreen> {
   // ── Suggest recipes from fridge ───────────────────────────────────────────
 
   Future<void> _suggestRecipes() async {
-    final ingredients = ref.read(fridgeProvider);
-    if (ingredients.isEmpty) {
+    final items = ref.read(fridgeProvider);
+    if (items.isEmpty) {
       _showSnack('Ajoute d\'abord des ingrédients à ton frigo.');
       return;
     }
@@ -297,7 +360,7 @@ class _FridgeScreenState extends ConsumerState<FridgeScreen> {
     setState(() => _isSuggesting = true);
     try {
       final profile = ref.read(userProfileProvider);
-      final names = await GeminiService.suggestFromFridge(ingredients, profile);
+      final names = await GeminiService.suggestFromFridge(items.map((i) => i.name).toList(), profile);
       if (!mounted) return;
 
       if (names.isEmpty) {
@@ -459,7 +522,7 @@ class _FridgeScreenState extends ConsumerState<FridgeScreen> {
   Widget build(BuildContext context) {
     final isDark = ref.watch(themeProvider);
     final ingredients = ref.watch(fridgeProvider);
-    final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
+    final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
     final textColor = isDark ? AppColors.textDark : AppColors.textLight;
     final subColor = isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
     return Scaffold(
@@ -477,13 +540,32 @@ class _FridgeScreenState extends ConsumerState<FridgeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Mon Frigo', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textColor)),
-                        const SizedBox(height: 2),
-                        Text(
-                          ingredients.isEmpty
-                              ? 'Frigo vide'
-                              : '${ingredients.length} ingrédient${ingredients.length > 1 ? 's' : ''}',
-                          style: TextStyle(fontSize: 13, color: subColor),
+                        Row(
+                          children: [
+                            Container(
+                              width: 4, height: 22,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [AppColors.blue, Color(0xFF1565C0)],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text('Mon Frigo', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: textColor)),
+                          ],
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 14),
+                          child: Text(
+                            ingredients.isEmpty
+                                ? 'Frigo vide'
+                                : '${ingredients.length} ingrédient${ingredients.length > 1 ? 's' : ''}'
+                                    '${ingredients.any((i) => i.needsAlert) ? ' · ${ingredients.where((i) => i.needsAlert).length} à surveiller' : ''}',
+                            style: TextStyle(fontSize: 12, color: subColor),
+                          ),
                         ),
                       ],
                     ),
@@ -555,11 +637,18 @@ class _FridgeScreenState extends ConsumerState<FridgeScreen> {
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children: ingredients.map((ing) => _IngredientChip(
-                              name: ing,
+                            children: ingredients.map((item) => _IngredientChip(
+                              item: item,
                               isDark: isDark,
                               textColor: textColor,
-                              onRemove: () => ref.read(fridgeProvider.notifier).remove(ing),
+                              onRemove: () {
+                                ref.read(fridgeProvider.notifier).remove(item.name);
+                                _scheduleExpiryAlerts();
+                              },
+                              onSetExpiry: (date) {
+                                ref.read(fridgeProvider.notifier).setExpiry(item.name, date);
+                                _scheduleExpiryAlerts();
+                              },
                             )).toList(),
                           ),
                         ],
@@ -667,29 +756,64 @@ class _FridgeScreenState extends ConsumerState<FridgeScreen> {
 // ─── Ingredient Chip ──────────────────────────────────────────────────────────
 
 class _IngredientChip extends StatelessWidget {
-  final String name;
+  final FridgeItem item;
   final bool isDark;
   final Color textColor;
   final VoidCallback onRemove;
+  final void Function(DateTime?) onSetExpiry;
 
   const _IngredientChip({
-    required this.name,
+    required this.item,
     required this.isDark,
     required this.textColor,
     required this.onRemove,
+    required this.onSetExpiry,
   });
+
+  Color get _expiryColor {
+    final days = item.daysUntilExpiry;
+    if (days == null) return AppColors.blue;
+    if (days < 0) return Colors.red;
+    if (days <= 1) return Colors.orange;
+    return AppColors.yellow;
+  }
+
+  String get _expiryLabel {
+    final days = item.daysUntilExpiry;
+    if (days == null) return '';
+    if (days < 0) return 'Expiré';
+    if (days == 0) return 'Auj.';
+    if (days == 1) return 'Dem.';
+    return 'J+$days';
+  }
+
+  Future<void> _pickDate(BuildContext context) async {
+    final initial = item.expiryDate ?? DateTime.now().add(const Duration(days: 3));
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial.isBefore(DateTime.now()) ? DateTime.now() : initial,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: 'Date d\'expiration',
+    );
+    if (picked != null) onSetExpiry(picked);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final baseColor = item.needsAlert ? _expiryColor : AppColors.blue;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : AppColors.lightCard,
+        gradient: LinearGradient(
+          colors: [baseColor.withValues(alpha: 0.12), baseColor.withValues(alpha: 0.05)],
+        ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+        border: Border.all(color: baseColor.withValues(alpha: item.needsAlert ? 0.6 : 0.3)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.04),
+            color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.03),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),
@@ -698,8 +822,35 @@ class _IngredientChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: textColor)),
+          Text(
+            item.name,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isDark ? AppColors.textDark : baseColor,
+            ),
+          ),
           const SizedBox(width: 6),
+          // Expiry badge / calendar tap
+          GestureDetector(
+            onTap: () => _pickDate(context),
+            child: item.expiryDate != null
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _expiryColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _expiryLabel,
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _expiryColor),
+                    ),
+                  )
+                : Icon(Icons.calendar_today_rounded, size: 13,
+                    color: (isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary)
+                        .withValues(alpha: 0.6)),
+          ),
+          const SizedBox(width: 4),
           GestureDetector(
             onTap: onRemove,
             child: Container(

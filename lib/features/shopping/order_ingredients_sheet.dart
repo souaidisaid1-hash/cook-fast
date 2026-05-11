@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/shopping_item.dart';
+import '../../shared/providers/app_providers.dart';
 
 class _Store {
   final String emoji;
@@ -70,16 +72,16 @@ bool _isPantry(String name) {
   return _pantryDefaults.any((p) => n.contains(p));
 }
 
-class OrderIngredientsSheet extends StatefulWidget {
+class OrderIngredientsSheet extends ConsumerStatefulWidget {
   final List<ShoppingItem> items;
 
   const OrderIngredientsSheet({super.key, required this.items});
 
   @override
-  State<OrderIngredientsSheet> createState() => _OrderIngredientsSheetState();
+  ConsumerState<OrderIngredientsSheet> createState() => _OrderIngredientsSheetState();
 }
 
-class _OrderIngredientsSheetState extends State<OrderIngredientsSheet> {
+class _OrderIngredientsSheetState extends ConsumerState<OrderIngredientsSheet> {
   late final Set<String> _selected;
   bool _copied = false;
 
@@ -130,33 +132,36 @@ class _OrderIngredientsSheetState extends State<OrderIngredientsSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = ref.watch(themeProvider);
+    final sheetBg = isDark ? AppColors.darkCard : Colors.white;
+    final textColor = isDark ? AppColors.textDark : AppColors.textLight;
+    final subColor = isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
+    final innerBg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
     final navBar = MediaQuery.of(context).viewPadding.bottom;
     final count = _selectedItems.length;
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.darkCard,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: sheetBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + navBar),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Handle
           Center(
             child: Container(
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.darkBorder,
+                color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
           const SizedBox(height: 16),
 
-          // Titre
           Row(
             children: [
               const Text('🛒', style: TextStyle(fontSize: 24)),
@@ -165,20 +170,15 @@ class _OrderIngredientsSheetState extends State<OrderIngredientsSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Commander mes courses',
-                      style: TextStyle(
-                        color: AppColors.textDark,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.w700),
                     ),
                     Text(
                       count == 0
                           ? 'Aucun article sélectionné'
                           : '$count article${count > 1 ? 's' : ''} sélectionné${count > 1 ? 's' : ''}',
-                      style: const TextStyle(
-                          color: AppColors.textDarkSecondary, fontSize: 12),
+                      style: TextStyle(color: subColor, fontSize: 12),
                     ),
                   ],
                 ),
@@ -203,11 +203,10 @@ class _OrderIngredientsSheetState extends State<OrderIngredientsSheet> {
 
           const SizedBox(height: 10),
 
-          // Liste des ingrédients avec cases à cocher
           Container(
             constraints: const BoxConstraints(maxHeight: 200),
             decoration: BoxDecoration(
-              color: AppColors.darkBg,
+              color: innerBg,
               borderRadius: BorderRadius.circular(14),
             ),
             child: ListView.builder(
@@ -230,42 +229,28 @@ class _OrderIngredientsSheetState extends State<OrderIngredientsSheet> {
                           height: 22,
                           decoration: BoxDecoration(
                             color: isOn ? AppColors.primary : Colors.transparent,
-                            border: Border.all(
-                              color: isOn ? AppColors.primary : AppColors.darkBorder,
-                              width: 2,
-                            ),
+                            border: Border.all(color: isOn ? AppColors.primary : (isDark ? AppColors.darkBorder : AppColors.lightBorder), width: 2),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: isOn
-                              ? const Icon(Icons.check_rounded,
-                                  size: 14, color: Colors.white)
-                              : null,
+                          child: isOn ? const Icon(Icons.check_rounded, size: 14, color: Colors.white) : null,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             item.name,
                             style: TextStyle(
-                              color: isOn
-                                  ? AppColors.textDark
-                                  : AppColors.textDarkSecondary,
+                              color: isOn ? textColor : subColor,
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                               decoration: isOn ? null : TextDecoration.lineThrough,
-                              decorationColor: AppColors.textDarkSecondary,
+                              decorationColor: subColor,
                             ),
                           ),
                         ),
                         if (item.measure.isNotEmpty)
                           Text(
                             item.measure,
-                            style: TextStyle(
-                              color: isOn
-                                  ? AppColors.primary
-                                  : AppColors.textDarkSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: TextStyle(color: isOn ? AppColors.primary : subColor, fontSize: 12, fontWeight: FontWeight.w600),
                           ),
                       ],
                     ),
@@ -277,50 +262,32 @@ class _OrderIngredientsSheetState extends State<OrderIngredientsSheet> {
 
           const SizedBox(height: 12),
 
-          // Copier
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: count > 0 ? _copyList : null,
-              icon: Icon(
-                _copied ? Icons.check_rounded : Icons.copy_rounded,
-                size: 18,
-                color: _copied ? AppColors.green : AppColors.textDarkSecondary,
-              ),
+              icon: Icon(_copied ? Icons.check_rounded : Icons.copy_rounded, size: 18, color: _copied ? AppColors.green : subColor),
               label: Text(
                 _copied ? 'Liste copiée !' : 'Copier la liste ($count)',
-                style: TextStyle(
-                  color: _copied ? AppColors.green : AppColors.textDarkSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(color: _copied ? AppColors.green : subColor, fontWeight: FontWeight.w600),
               ),
               style: OutlinedButton.styleFrom(
-                side: BorderSide(
-                    color: _copied ? AppColors.green : AppColors.darkBorder),
+                side: BorderSide(color: _copied ? AppColors.green : (isDark ? AppColors.darkBorder : AppColors.lightBorder)),
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ),
 
           const SizedBox(height: 16),
 
-          const Text(
-            'OUVRIR DANS',
-            style: TextStyle(
-              color: AppColors.textDarkSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-            ),
-          ),
+          Text('OUVRIR DANS', style: TextStyle(color: subColor, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1)),
 
           const SizedBox(height: 8),
 
-          // Enseignes
           ...(_stores.map((store) => _StoreTile(
                 store: store,
+                isDark: isDark,
                 enabled: count > 0,
                 onTap: () => _openStore(store),
               ))),
@@ -332,14 +299,17 @@ class _OrderIngredientsSheetState extends State<OrderIngredientsSheet> {
 
 class _StoreTile extends StatelessWidget {
   final _Store store;
+  final bool isDark;
   final bool enabled;
   final VoidCallback onTap;
 
-  const _StoreTile(
-      {required this.store, required this.enabled, required this.onTap});
+  const _StoreTile({required this.store, required this.isDark, required this.enabled, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final textColor = isDark ? AppColors.textDark : AppColors.textLight;
+    final subColor = isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
+
     return GestureDetector(
       onTap: enabled ? onTap : null,
       child: Opacity(
@@ -348,9 +318,9 @@ class _StoreTile extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
           decoration: BoxDecoration(
-            color: AppColors.darkBg,
+            color: isDark ? AppColors.darkBg : const Color(0xFFF5F2EE),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.darkBorder),
+            border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
           ),
           child: Row(
             children: [
@@ -361,28 +331,19 @@ class _StoreTile extends StatelessWidget {
                   color: store.color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Center(
-                    child: Text(store.emoji,
-                        style: const TextStyle(fontSize: 18))),
+                child: Center(child: Text(store.emoji, style: const TextStyle(fontSize: 18))),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(store.name,
-                        style: const TextStyle(
-                            color: AppColors.textDark,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600)),
-                    Text(store.sub,
-                        style: const TextStyle(
-                            color: AppColors.textDarkSecondary, fontSize: 12)),
+                    Text(store.name, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+                    Text(store.sub, style: TextStyle(color: subColor, fontSize: 12)),
                   ],
                 ),
               ),
-              const Icon(Icons.open_in_new_rounded,
-                  color: AppColors.textDarkSecondary, size: 18),
+              Icon(Icons.open_in_new_rounded, color: subColor, size: 18),
             ],
           ),
         ),

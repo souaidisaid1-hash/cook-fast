@@ -77,8 +77,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(themeProvider);
-    final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
-    final cardColor = isDark ? AppColors.darkCard : AppColors.lightCard;
+    final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
+    final cardColor = isDark ? AppColors.darkCard : Colors.white;
     final textColor = isDark ? AppColors.textDark : AppColors.textLight;
 
     return Scaffold(
@@ -119,13 +119,21 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
               ),
 
               const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _nextStep,
-                  child: Text(
-                    _step == _steps.length - 1 ? '🚀 Commencer !' : 'Continuer',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              GestureDetector(
+                onTap: _nextStep,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [AppColors.primary, AppColors.yellow]),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.35), blurRadius: 16, offset: const Offset(0, 6))],
+                  ),
+                  child: Center(
+                    child: Text(
+                      _step == _steps.length - 1 ? '🚀 Commencer !' : 'Continuer',
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ),
               ),
@@ -269,7 +277,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   decoration: BoxDecoration(
-                    color: selected ? AppColors.primary.withOpacity(0.15) : cardColor,
+                    color: selected ? AppColors.primary.withValues(alpha:0.15) : cardColor,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: selected ? AppColors.primary : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
@@ -300,7 +308,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary.withOpacity(0.12) : cardColor,
+          color: selected ? AppColors.primary.withValues(alpha:0.12) : cardColor,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: selected ? AppColors.primary : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
@@ -334,7 +342,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
         width: 52,
         height: 52,
         decoration: BoxDecoration(
-          color: AppColors.primary.withOpacity(0.15),
+          color: AppColors.primary.withValues(alpha:0.15),
           shape: BoxShape.circle,
           border: Border.all(color: AppColors.primary, width: 1.5),
         ),

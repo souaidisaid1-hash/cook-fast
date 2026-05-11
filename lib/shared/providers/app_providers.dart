@@ -2,10 +2,35 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/family_member.dart';
+import '../models/fridge_item.dart';
 import '../models/journal_entry.dart';
 import '../models/recipe.dart';
 import '../models/user_profile.dart';
 import '../models/shopping_item.dart';
+
+// ─── Language ────────────────────────────────────────────────────────────────
+
+final langProvider = StateNotifierProvider<LangNotifier, String>((ref) {
+  return LangNotifier();
+});
+
+class LangNotifier extends StateNotifier<String> {
+  static const _boxKey = 'appLang';
+
+  LangNotifier() : super('fr') {
+    _load();
+  }
+
+  void _load() {
+    final box = Hive.box('settings');
+    state = box.get(_boxKey, defaultValue: 'fr') as String;
+  }
+
+  void set(String lang) {
+    state = lang;
+    Hive.box('settings').put(_boxKey, lang);
+  }
+}
 
 // ─── Theme ───────────────────────────────────────────────────────────────────
 
@@ -283,11 +308,15 @@ class ShoppingNotifier extends StateNotifier<List<ShoppingItem>> {
 
 // ─── Fridge ───────────────────────────────────────────────────────────────────
 
-final fridgeProvider = StateNotifierProvider<FridgeNotifier, List<String>>((ref) {
+final fridgeProvider = StateNotifierProvider<FridgeNotifier, List<FridgeItem>>((ref) {
   return FridgeNotifier();
 });
 
-class FridgeNotifier extends StateNotifier<List<String>> {
+final fridgeExpiringCountProvider = Provider<int>((ref) {
+  return ref.watch(fridgeProvider).where((i) => i.needsAlert).length;
+});
+
+class FridgeNotifier extends StateNotifier<List<FridgeItem>> {
   FridgeNotifier() : super([]) {
     _load();
   }
@@ -296,29 +325,40 @@ class FridgeNotifier extends StateNotifier<List<String>> {
     final box = Hive.box('fridge');
     final raw = box.get('ingredients');
     if (raw != null) {
-      state = List<String>.from(jsonDecode(raw));
+      final list = jsonDecode(raw) as List;
+      state = list.map((e) {
+        if (e is String) return FridgeItem.simple(e);
+        return FridgeItem.fromJson(Map<String, dynamic>.from(e));
+      }).toList();
     }
   }
 
   void _save() {
-    Hive.box('fridge').put('ingredients', jsonEncode(state));
+    Hive.box('fridge').put('ingredients', jsonEncode(state.map((i) => i.toJson()).toList()));
   }
 
-  void add(String name) {
-    if (!state.contains(name.trim())) {
-      state = [...state, name.trim()];
+  void add(String name, {DateTime? expiryDate}) {
+    if (!state.any((i) => i.name == name.trim())) {
+      state = [...state, FridgeItem(name: name.trim(), addedAt: DateTime.now(), expiryDate: expiryDate)];
       _save();
     }
   }
 
   void addAll(List<String> names) {
-    final filtered = names.where((n) => !state.contains(n.trim())).toList();
-    state = [...state, ...filtered];
+    final filtered = names.where((n) => !state.any((i) => i.name == n.trim())).toList();
+    state = [...state, ...filtered.map((n) => FridgeItem.simple(n))];
+    _save();
+  }
+
+  void setExpiry(String name, DateTime? date) {
+    state = state
+        .map((i) => i.name == name ? i.copyWith(expiryDate: date, clearExpiry: date == null) : i)
+        .toList();
     _save();
   }
 
   void remove(String name) {
-    state = state.where((n) => n != name).toList();
+    state = state.where((i) => i.name != name).toList();
     _save();
   }
 

@@ -1,11 +1,14 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/recipe.dart';
+import '../../shared/models/translated_content.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/services/gemini_service.dart';
 import '../../shared/services/meal_db_service.dart';
@@ -20,6 +23,10 @@ class _DetailState {
   final Map<String, int>? nutrition;
   final bool nutritionLoading;
   final int portions;
+  final String? translatedTitle;
+  final List<String>? translatedSteps;
+  final List<String>? translatedIngredients;
+  final bool translationLoading;
 
   const _DetailState({
     this.recipe,
@@ -27,6 +34,10 @@ class _DetailState {
     this.nutrition,
     this.nutritionLoading = false,
     this.portions = 2,
+    this.translatedTitle,
+    this.translatedSteps,
+    this.translatedIngredients,
+    this.translationLoading = false,
   });
 
   _DetailState copyWith({
@@ -35,6 +46,10 @@ class _DetailState {
     Map<String, int>? nutrition,
     bool? nutritionLoading,
     int? portions,
+    String? translatedTitle,
+    List<String>? translatedSteps,
+    List<String>? translatedIngredients,
+    bool? translationLoading,
   }) =>
       _DetailState(
         recipe: recipe ?? this.recipe,
@@ -42,21 +57,30 @@ class _DetailState {
         nutrition: nutrition ?? this.nutrition,
         nutritionLoading: nutritionLoading ?? this.nutritionLoading,
         portions: portions ?? this.portions,
+        translatedTitle: translatedTitle ?? this.translatedTitle,
+        translatedSteps: translatedSteps ?? this.translatedSteps,
+        translatedIngredients: translatedIngredients ?? this.translatedIngredients,
+        translationLoading: translationLoading ?? this.translationLoading,
       );
 }
 
 class _DetailNotifier extends StateNotifier<_DetailState> {
-  _DetailNotifier(Recipe? initial, String id, int defaultPortions)
+  _DetailNotifier(Recipe? initial, String id, int defaultPortions, String lang)
       : super(_DetailState(recipe: initial, isLoading: initial == null, portions: defaultPortions)) {
-    if (initial == null) _fetchById(id);
-    if (initial != null) _loadNutrition(initial);
+    if (initial == null) {
+      _fetchById(id, lang);
+    } else {
+      _loadNutrition(initial);
+      _loadTranslation(initial, lang);
+    }
   }
 
-  Future<void> _fetchById(String id) async {
+  Future<void> _fetchById(String id, String lang) async {
     final recipe = await MealDbService.byId(id);
     if (recipe != null) {
       state = state.copyWith(recipe: recipe, isLoading: false);
       _loadNutrition(recipe);
+      _loadTranslation(recipe, lang);
     } else {
       state = state.copyWith(isLoading: false);
     }
@@ -69,14 +93,50 @@ class _DetailNotifier extends StateNotifier<_DetailState> {
       recipe.ingredients,
       recipe.measures,
     );
-    state = state.copyWith(nutrition: nutrition, nutritionLoading: false);
+    if (mounted) state = state.copyWith(nutrition: nutrition, nutritionLoading: false);
+  }
+
+  Future<void> _loadTranslation(Recipe recipe, String lang) async {
+    if (lang == 'en' || recipe.steps.isEmpty) return;
+    final box = Hive.box('translations');
+    final cached = TranslatedContent.tryParseFromHive(box.get(recipe.id));
+    if (cached != null) {
+      if (mounted) {
+        state = state.copyWith(
+          translatedTitle: cached.title,
+          translatedSteps: cached.steps,
+          translatedIngredients: cached.ingredients,
+        );
+      }
+      return;
+    }
+    if (mounted) state = state.copyWith(translationLoading: true);
+    final translated = await GeminiService.translateRecipe(
+      recipeId: recipe.id,
+      title: recipe.title,
+      steps: recipe.steps,
+      ingredients: recipe.ingredients,
+      targetLang: lang,
+    );
+    if (!mounted) return;
+    if (translated != null) {
+      box.put(recipe.id, jsonEncode(translated.toJson()));
+      state = state.copyWith(
+        translatedTitle: translated.title,
+        translatedSteps: translated.steps,
+        translatedIngredients: translated.ingredients,
+        translationLoading: false,
+      );
+    } else {
+      state = state.copyWith(translationLoading: false);
+    }
   }
 
   void setPortions(int p) => state = state.copyWith(portions: p);
 }
 
-final _detailProvider = StateNotifierProvider.family.autoDispose<_DetailNotifier, _DetailState, (Recipe?, String, int)>(
-  (ref, args) => _DetailNotifier(args.$1, args.$2, args.$3),
+final _detailProvider = StateNotifierProvider.family.autoDispose<_DetailNotifier, _DetailState, (Recipe?, String, int, String)>(
+  (ref, args) => _DetailNotifier(args.$1, args.$2, args.$3, args.$4),
 );
 
 // ─── Screen ─────────────────────────────────────────────────────────────────────
@@ -90,154 +150,199 @@ class RecipeDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = ref.watch(themeProvider);
+    final lang = ref.watch(langProvider);
     final profile = ref.watch(userProfileProvider);
-    final state = ref.watch(_detailProvider((recipe, id, profile.persons)));
-    final notifier = ref.read(_detailProvider((recipe, id, profile.persons)).notifier);
+    final state = ref.watch(_detailProvider((recipe, id, profile.persons, lang)));
+    final notifier = ref.read(_detailProvider((recipe, id, profile.persons, lang)).notifier);
+    final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
 
     if (state.isLoading) return _loadingScreen(isDark);
     if (state.recipe == null) return _errorScreen(context, isDark);
 
     final r = state.recipe!;
     final isFav = ref.watch(favoritesProvider).any((fav) => fav.id == r.id);
+    final estTime = _estimateTime(r);
+
+    final displayIngredients = state.translatedIngredients ?? r.ingredients;
+    final displaySteps = state.translatedSteps ?? r.steps;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBg : AppColors.lightBg,
+      backgroundColor: bg,
       body: Stack(
         children: [
           CustomScrollView(
             slivers: [
-              // ── Hero image ──────────────────────────────────────────────────
+              // ── Hero ──────────────────────────────────────────────────────────
               SliverAppBar(
-                expandedHeight: 320,
+                expandedHeight: 360,
                 pinned: true,
-                backgroundColor: isDark ? AppColors.darkBg : AppColors.lightBg,
-                leading: GestureDetector(
-                  onTap: () => context.pop(),
-                  child: Container(
-                    margin: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.5),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
-                  ),
-                ),
-                actions: [
-                  GestureDetector(
-                    onTap: () => _shareRecipe(r),
-                    child: Container(
-                      margin: const EdgeInsets.fromLTRB(0, 8, 4, 8),
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.ios_share_rounded, color: Colors.white, size: 20),
-                    ),
-                  ),
-                  if (isFav)
-                    GestureDetector(
-                      onTap: () => _showCollectionSheet(context, ref, r),
-                      child: Container(
-                        margin: const EdgeInsets.fromLTRB(0, 8, 4, 8),
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.5),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.bookmark_add_rounded, color: Colors.white, size: 20),
-                      ),
-                    ),
-                  GestureDetector(
-                    onTap: () => ref.read(favoritesProvider.notifier).toggle(r),
-                    child: Container(
-                      margin: const EdgeInsets.all(8),
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                        color: isFav ? Colors.red : Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ],
+                backgroundColor: isDark ? AppColors.darkBg : const Color(0xFFF5F2EE),
+                elevation: 0,
+                automaticallyImplyLeading: false,
                 flexibleSpace: FlexibleSpaceBar(
-                  background: r.imageUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl: r.imageUrl!,
-                          fit: BoxFit.cover,
-                          placeholder: (_, __) => Container(color: AppColors.darkCard),
-                          errorWidget: (_, __, ___) => _imagePlaceholder(),
-                        )
-                      : _imagePlaceholder(),
+                  background: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      r.imageUrl != null
+                          ? CachedNetworkImage(
+                              imageUrl: r.imageUrl!,
+                              fit: BoxFit.cover,
+                              placeholder: (_, _) => Container(color: AppColors.darkCard),
+                              errorWidget: (_, _, _) => _imagePlaceholder(),
+                            )
+                          : _imagePlaceholder(),
+                      // Gradient overlay — bottom
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.15),
+                              Colors.black.withValues(alpha: 0.75),
+                            ],
+                            stops: const [0.4, 0.65, 1.0],
+                          ),
+                        ),
+                      ),
+                      // Gradient overlay — top (for buttons)
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.45),
+                              Colors.transparent,
+                            ],
+                            stops: const [0.0, 0.35],
+                          ),
+                        ),
+                      ),
+                      // Floating action buttons at top
+                      Positioned(
+                        top: MediaQuery.of(context).padding.top + 8,
+                        left: 12,
+                        right: 12,
+                        child: Row(
+                          children: [
+                            _circleBtn(Icons.arrow_back_rounded, () => context.pop()),
+                            const Spacer(),
+                            _circleBtn(Icons.ios_share_rounded, () => _shareRecipe(r)),
+                            const SizedBox(width: 8),
+                            if (isFav) ...[
+                              _circleBtn(Icons.bookmark_add_rounded,
+                                  () => _showCollectionSheet(context, ref, r)),
+                              const SizedBox(width: 8),
+                            ],
+                            _circleBtnColored(
+                              isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                              isFav ? Colors.red : Colors.white,
+                              () => ref.read(favoritesProvider.notifier).toggle(r),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Recipe title overlay at bottom of hero
+                      Positioned(
+                        bottom: 16,
+                        left: 16,
+                        right: 16,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                if (r.category != null)
+                                  _gradientPill(r.category!,
+                                      [AppColors.primary, AppColors.yellow]),
+                                if (r.area != null)
+                                  _plainPill('🌍 ${r.area!}', isDark),
+                                if (r.isVegetarian)
+                                  _plainPill('🌿 Végan', isDark,
+                                      color: AppColors.green),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              r.title,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                height: 1.2,
+                                shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                _statChip('⏱', '$estTime min'),
+                                const SizedBox(width: 8),
+                                _statChip('🥕', '${r.ingredients.length} ingr.'),
+                                const SizedBox(width: 8),
+                                if (r.steps.isNotEmpty)
+                                  _statChip('📋', '${r.steps.length} étapes'),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
-              // ── Content ─────────────────────────────────────────────────────
+              // ── Content ──────────────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Titre + badges
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            r.title,
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                              color: isDark ? AppColors.textDark : AppColors.textLight,
-                              height: 1.2,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              if (r.category != null) _badge(r.category!, AppColors.primary, Colors.white),
-                              if (r.area != null) _badge('🌍 ${r.area!}', isDark ? AppColors.darkCard : AppColors.lightBorder, isDark ? AppColors.textDark : AppColors.textLight),
-                              if (r.isVegetarian) _badge('🌿 Végétarien', AppColors.green.withValues(alpha: 0.15), AppColors.green),
-                              if (r.cookTimeMinutes != null) _badge('⏱ ${r.cookTimeMinutes} min', isDark ? AppColors.darkCard : AppColors.lightBorder, AppColors.primary),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
+                    const SizedBox(height: 16),
 
-                    const SizedBox(height: 20),
-
-                    // ── Portions slider ───────────────────────────────────────
-                    _card(
+                    // ── Portions ────────────────────────────────────────────────
+                    _sectionCard(
                       isDark,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          _sectionHeader('👥', 'Portions', isDark),
+                          const SizedBox(height: 14),
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('Portions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? AppColors.textDark : AppColors.textLight)),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  '${state.portions} personne${state.portions > 1 ? 's' : ''}',
-                                  style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
+                              _portionBtn(Icons.remove_rounded,
+                                  state.portions > 1 ? () => notifier.setPortions(state.portions - 1) : null,
+                                  isDark),
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      '${state.portions}',
+                                      style: const TextStyle(
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                    Text(
+                                      'personne${state.portions > 1 ? 's' : ''}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
+                              _portionBtn(Icons.add_rounded,
+                                  state.portions < 8 ? () => notifier.setPortions(state.portions + 1) : null,
+                                  isDark),
                             ],
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
                           SliderTheme(
                             data: SliderThemeData(
                               activeTrackColor: AppColors.primary,
@@ -255,65 +360,80 @@ class RecipeDetailScreen extends ConsumerWidget {
                               onChanged: (v) => notifier.setPortions(v.round()),
                             ),
                           ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: List.generate(8, (i) => Text('${i + 1}', style: TextStyle(fontSize: 11, color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary))),
-                          ),
                         ],
                       ),
                     ),
 
-                    // ── Nutrition ──────────────────────────────────────────────
+                    // ── Nutrition ───────────────────────────────────────────────
                     if (state.nutritionLoading)
-                      _card(isDark, child: _nutritionLoading(isDark))
+                      _sectionCard(isDark, child: _nutritionLoading(isDark))
                     else if (state.nutrition != null)
-                      _card(isDark, child: _nutritionCard(state.nutrition!, state.portions, isDark)),
+                      _sectionCard(isDark,
+                          child: _nutritionCard(state.nutrition!, state.portions, isDark)),
 
-                    // ── Ingrédients ────────────────────────────────────────────
-                    _card(
+                    // ── Ingrédients ─────────────────────────────────────────────
+                    _sectionCard(
                       isDark,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              const Text('🥕', style: TextStyle(fontSize: 20)),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Ingrédients',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? AppColors.textDark : AppColors.textLight),
-                              ),
-                              const Spacer(),
-                              Text(
-                                '${r.ingredients.length} items',
-                                style: TextStyle(fontSize: 13, color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          ...List.generate(r.ingredients.length, (i) {
+                          _sectionHeader('🥕', 'Ingrédients', isDark,
+                              trailing: state.translationLoading
+                                  ? Row(mainAxisSize: MainAxisSize.min, children: [
+                                      const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+                                      const SizedBox(width: 6),
+                                      Text('Traduction…', style: TextStyle(fontSize: 11, color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary)),
+                                    ])
+                                  : Text(
+                                      '${displayIngredients.length} items',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary,
+                                      ),
+                                    )),
+                          const SizedBox(height: 16),
+                          ...List.generate(displayIngredients.length, (i) {
                             final measure = r.measures.elementAtOrNull(i) ?? '';
                             final scaled = _scaleMeasure(measure, state.portions, profile.persons);
                             return Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.only(bottom: 12),
                               child: Row(
                                 children: [
                                   Container(
-                                    width: 6,
-                                    height: 6,
-                                    decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [AppColors.primary, AppColors.yellow],
+                                      ),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Text(
-                                      r.ingredients[i],
-                                      style: TextStyle(fontSize: 14, color: isDark ? AppColors.textDark : AppColors.textLight),
+                                      displayIngredients[i],
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: isDark ? AppColors.textDark : AppColors.textLight,
+                                      ),
                                     ),
                                   ),
                                   if (scaled.isNotEmpty)
-                                    Text(
-                                      scaled,
-                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        scaled,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
                                     ),
                                 ],
                               ),
@@ -323,68 +443,83 @@ class RecipeDetailScreen extends ConsumerWidget {
                       ),
                     ),
 
-                    // ── Étapes ────────────────────────────────────────────────
-                    if (r.steps.isNotEmpty)
-                      _card(
+                    // ── Étapes ──────────────────────────────────────────────────
+                    if (displaySteps.isNotEmpty)
+                      _sectionCard(
                         isDark,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                const Text('👨‍🍳', style: TextStyle(fontSize: 20)),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Préparation',
-                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? AppColors.textDark : AppColors.textLight),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  '${r.steps.length} étapes',
-                                  style: TextStyle(fontSize: 13, color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            ...List.generate(r.steps.length, (i) => _stepTile(i, r.steps[i], isDark)),
+                            _sectionHeader('👨‍🍳', 'Préparation', isDark,
+                                trailing: Text(
+                                  '${displaySteps.length} étapes',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary,
+                                  ),
+                                )),
+                            const SizedBox(height: 18),
+                            ...List.generate(displaySteps.length, (i) => _stepTile(i, displaySteps[i], isDark)),
                           ],
                         ),
                       ),
 
-                    // ── YouTube ────────────────────────────────────────────────
+                    // ── YouTube ─────────────────────────────────────────────────
                     if (r.youtubeUrl != null && r.youtubeUrl!.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                         child: GestureDetector(
                           onTap: () => _launchUrl(r.youtubeUrl!),
                           child: Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: Colors.red.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.red.withValues(alpha: 0.18),
+                                  Colors.red.withValues(alpha: 0.06),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: Colors.red.withValues(alpha: 0.35)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.red.withValues(alpha: 0.12),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
-                            child: const Row(
+                            child: Row(
                               children: [
-                                Icon(Icons.play_circle_filled_rounded, color: Colors.red, size: 28),
-                                SizedBox(width: 12),
-                                Expanded(
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withValues(alpha: 0.15),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.play_circle_filled_rounded, color: Colors.red, size: 28),
+                                ),
+                                const SizedBox(width: 14),
+                                const Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text('Vidéo de la recette', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red, fontSize: 15)),
-                                      Text('Voir sur YouTube', style: TextStyle(color: Colors.red, fontSize: 12)),
+                                      Text('Vidéo de la recette',
+                                          style: TextStyle(fontWeight: FontWeight.w700, color: Colors.red, fontSize: 15)),
+                                      SizedBox(height: 2),
+                                      Text('Voir la préparation sur YouTube',
+                                          style: TextStyle(color: Colors.red, fontSize: 12)),
                                     ],
                                   ),
                                 ),
-                                Icon(Icons.open_in_new_rounded, color: Colors.red, size: 18),
+                                const Icon(Icons.open_in_new_rounded, color: Colors.red, size: 18),
                               ],
                             ),
                           ),
                         ),
                       ),
 
-                    // Espace pour le bouton fixe
                     const SizedBox(height: 140),
                   ],
                 ),
@@ -392,60 +527,80 @@ class RecipeDetailScreen extends ConsumerWidget {
             ],
           ),
 
-          // ── Bouton fixe Démarrer la cuisson ─────────────────────────────────
+          // ── Bottom action bar ─────────────────────────────────────────────────
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Container(
-              padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(context).padding.bottom + 12),
+              padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).viewPadding.bottom + 12),
               decoration: BoxDecoration(
-                color: isDark ? AppColors.darkBg : AppColors.lightBg,
+                color: isDark ? AppColors.darkBg.withValues(alpha: 0.97) : const Color(0xFFF5F2EE).withValues(alpha: 0.97),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.08),
-                    blurRadius: 20,
-                    offset: const Offset(0, -4),
+                    color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.1),
+                    blurRadius: 24,
+                    offset: const Offset(0, -6),
                   ),
                 ],
               ),
               child: state.recipe != null
                   ? Row(
                       children: [
+                        // Cuisiner — gradient CTA
                         Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () => context.push('/cook-mode', extra: r),
-                            icon: const Text('👨‍🍳', style: TextStyle(fontSize: 16)),
-                            label: const Text('Cuisiner', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              minimumSize: const Size(0, 54),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          child: GestureDetector(
+                            onTap: () => context.push('/cook-mode', extra: r),
+                            child: Container(
+                              height: 54,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [AppColors.primary, AppColors.yellow],
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primary.withValues(alpha: 0.4),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text('👨‍🍳', style: TextStyle(fontSize: 18)),
+                                  SizedBox(width: 8),
+                                  Text('Cuisiner maintenant',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                      )),
+                                ],
+                              ),
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () => context.push('/cook-together-create', extra: r),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.blue,
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size(0, 54),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                          ),
-                          child: const Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('👥', style: TextStyle(fontSize: 18)),
-                              Text('Ensemble', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
+                        // Ensemble
+                        _actionIconBtn(
+                          emoji: '👥',
+                          label: 'Ensemble',
+                          color: AppColors.blue,
+                          isDark: isDark,
+                          onTap: () => context.push('/cook-together-create', extra: r),
                         ),
                         const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () {
+                        // Commander
+                        _actionIconBtn(
+                          emoji: '🛒',
+                          label: 'Commander',
+                          color: isDark ? const Color(0xFF2A2A3E) : Colors.white,
+                          isDark: isDark,
+                          onTap: () {
                             final orderItems = List.generate(
                               r.ingredients.length,
                               (i) => ShoppingItem(
@@ -462,23 +617,6 @@ class RecipeDetailScreen extends ConsumerWidget {
                               builder: (_) => OrderIngredientsSheet(items: orderItems),
                             );
                           },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1C1C2E),
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size(0, 54),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              side: const BorderSide(color: AppColors.darkBorder),
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                          ),
-                          child: const Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('🛒', style: TextStyle(fontSize: 18)),
-                              Text('Commander', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
                         ),
                       ],
                     )
@@ -489,6 +627,324 @@ class RecipeDetailScreen extends ConsumerWidget {
       ),
     );
   }
+
+  // ─── UI helpers ─────────────────────────────────────────────────────────────
+
+  static Widget _circleBtn(IconData icon, VoidCallback onTap) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.45),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: Colors.white, size: 20),
+        ),
+      );
+
+  static Widget _circleBtnColored(IconData icon, Color iconColor, VoidCallback onTap) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.45),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: iconColor, size: 20),
+        ),
+      );
+
+  static Widget _gradientPill(String label, List<Color> colors) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: colors),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+      );
+
+  static Widget _plainPill(String label, bool isDark, {Color? color}) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: color != null ? color.withValues(alpha: 0.18) : Colors.white.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color != null ? color.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.35)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(color: color ?? Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+        ),
+      );
+
+  static Widget _statChip(String emoji, String label) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 12)),
+            const SizedBox(width: 4),
+            Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      );
+
+  static Widget _sectionCard(bool isDark, {required Widget child}) => Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkCard : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.05),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: child,
+      );
+
+  static Widget _sectionHeader(String emoji, String title, bool isDark, {Widget? trailing}) => Row(
+        children: [
+          Container(
+            width: 4,
+            height: 20,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppColors.primary, AppColors.yellow],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(emoji, style: const TextStyle(fontSize: 18)),
+          const SizedBox(width: 6),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: isDark ? AppColors.textDark : AppColors.textLight,
+            ),
+          ),
+          if (trailing != null) ...[const Spacer(), trailing],
+        ],
+      );
+
+  static Widget _portionBtn(IconData icon, VoidCallback? onTap, bool isDark) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: onTap != null ? AppColors.primary.withValues(alpha: 0.12) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: onTap != null ? AppColors.primary.withValues(alpha: 0.3) : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+            ),
+          ),
+          child: Icon(icon, color: onTap != null ? AppColors.primary : (isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary), size: 20),
+        ),
+      );
+
+  static Widget _actionIconBtn({
+    required String emoji,
+    required String label,
+    required Color color,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) =>
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 60,
+          height: 54,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(16),
+            border: color == Colors.white || color == const Color(0xFF2A2A3E)
+                ? Border.all(color: isDark ? AppColors.darkBorder : AppColors.lightBorder)
+                : null,
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.25),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 18)),
+              const SizedBox(height: 2),
+              Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: isDark ? AppColors.textDark : AppColors.textLight)),
+            ],
+          ),
+        ),
+      );
+
+  Widget _stepTile(int index, String step, bool isDark) => Padding(
+        padding: const EdgeInsets.only(bottom: 18),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.primary, AppColors.yellow],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(9),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.35),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Text(
+                  '${index + 1}',
+                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 5),
+                child: Text(
+                  step,
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.55,
+                    color: isDark ? AppColors.textDark : AppColors.textLight,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _nutritionCard(Map<String, int> n, int portions, bool isDark) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader('⚡', 'Valeurs nutritionnelles', isDark,
+              trailing: Text(
+                'total recette',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary,
+                ),
+              )),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              _nutriTile('${n['calories'] ?? 0}', 'kcal', AppColors.primary, isDark),
+              _nutriTile('${n['protein'] ?? 0}g', 'Protéines', AppColors.green, isDark),
+              _nutriTile('${n['carbs'] ?? 0}g', 'Glucides', AppColors.yellow, isDark),
+              _nutriTile('${n['fat'] ?? 0}g', 'Lipides', AppColors.purple, isDark),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              'Par portion : ~${((n['calories'] ?? 0) / (portions == 0 ? 1 : portions)).round()} kcal',
+              style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      );
+
+  Widget _nutriTile(String value, String label, Color color, bool isDark) => Expanded(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            children: [
+              Text(value,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: color)),
+              const SizedBox(height: 3),
+              Text(label,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary,
+                  ),
+                  textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
+
+  Widget _nutritionLoading(bool isDark) => Row(
+        children: [
+          Container(
+            width: 4,
+            height: 20,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [AppColors.primary, AppColors.yellow]),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Text('⚡', style: TextStyle(fontSize: 18)),
+          const SizedBox(width: 6),
+          Text(
+            'Calcul nutrition IA...',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: isDark ? AppColors.textDark : AppColors.textLight,
+            ),
+          ),
+          const Spacer(),
+          const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.primary),
+          ),
+        ],
+      );
+
+  Widget _imagePlaceholder() => Container(
+        color: AppColors.darkCard,
+        child: const Center(child: Icon(Icons.restaurant_rounded, size: 60, color: AppColors.primary)),
+      );
+
+  Widget _loadingScreen(bool isDark) => Scaffold(
+        backgroundColor: isDark ? AppColors.darkBg : const Color(0xFFF5F2EE),
+        body: const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      );
+
+  Widget _errorScreen(BuildContext context, bool isDark) => Scaffold(
+        backgroundColor: isDark ? AppColors.darkBg : const Color(0xFFF5F2EE),
+        appBar: AppBar(leading: BackButton(onPressed: () => context.pop())),
+        body: const Center(child: Text('Recette introuvable')),
+      );
 
   // ─── Collections ────────────────────────────────────────────────────────────
 
@@ -508,184 +964,39 @@ class RecipeDetailScreen extends ConsumerWidget {
       r.ingredients.length,
       (i) {
         final measure = r.measures.elementAtOrNull(i) ?? '';
-        return measure.isNotEmpty
-            ? '• ${r.ingredients[i]} ($measure)'
-            : '• ${r.ingredients[i]}';
+        return measure.isNotEmpty ? '• ${r.ingredients[i]} ($measure)' : '• ${r.ingredients[i]}';
       },
     ).join('\n');
 
-    final steps = r.steps.isEmpty
-        ? ''
-        : '\n\n👨‍🍳 Préparation :\n' +
-            r.steps
-                .asMap()
-                .entries
-                .map((e) => '${e.key + 1}. ${e.value}')
-                .join('\n');
+    final stepsText = r.steps.asMap().entries.map((e) => '${e.key + 1}. ${e.value}').join('\n');
+    final steps = r.steps.isEmpty ? '' : '\n\n👨‍🍳 Préparation :\n$stepsText';
 
-    final text = '🍽️ ${r.title}'
-        '${r.category != null ? ' · ${r.category}' : ''}\n\n'
-        '📋 Ingrédients :\n$ingredients'
-        '$steps\n\n'
-        '📱 Partagé depuis CookFast';
+    final cat = r.category != null ? ' · ${r.category}' : '';
+    final text = '🍽️ ${r.title}$cat\n\n📋 Ingrédients :\n$ingredients$steps\n\n📱 Partagé depuis CookFast';
 
     Share.share(text, subject: r.title);
   }
 
-  // ─── Helpers ────────────────────────────────────────────────────────────────
+  // ─── Utils ──────────────────────────────────────────────────────────────────
 
-  Widget _card(bool isDark, {required Widget child}) => Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkCard : AppColors.lightCard,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: child,
-      );
-
-  Widget _badge(String label, Color bg, Color fg) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
-        child: Text(label, style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w600)),
-      );
-
-  Widget _stepTile(int index, String step, bool isDark) => Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
-                child: Text(
-                  '${index + 1}',
-                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  step,
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.5,
-                    color: isDark ? AppColors.textDark : AppColors.textLight,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-
-  Widget _nutritionCard(Map<String, int> n, int portions, bool isDark) {
-    final factor = portions;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Text('⚡', style: TextStyle(fontSize: 20)),
-            const SizedBox(width: 8),
-            Text(
-              'Valeurs nutritionnelles',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? AppColors.textDark : AppColors.textLight),
-            ),
-            const Spacer(),
-            Text(
-              'total recette',
-              style: TextStyle(fontSize: 11, color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            _nutriStat('${(n['calories'] ?? 0)}', 'kcal', AppColors.primary, isDark),
-            _nutriStat('${n['protein'] ?? 0}g', 'Protéines', AppColors.green, isDark),
-            _nutriStat('${n['carbs'] ?? 0}g', 'Glucides', AppColors.yellow, isDark),
-            _nutriStat('${n['fat'] ?? 0}g', 'Lipides', AppColors.purple, isDark),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Par portion : ~${((n['calories'] ?? 0) / (factor == 0 ? 1 : factor)).round()} kcal',
-          style: TextStyle(fontSize: 12, color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary),
-        ),
-      ],
-    );
+  static int _estimateTime(Recipe r) {
+    final base = r.steps.length * 5;
+    return base.clamp(15, 90);
   }
-
-  Widget _nutriStat(String value, String label, Color color, bool isDark) => Expanded(
-        child: Column(
-          children: [
-            Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: color)),
-            const SizedBox(height: 2),
-            Text(label, style: TextStyle(fontSize: 11, color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary), textAlign: TextAlign.center),
-          ],
-        ),
-      );
-
-  Widget _nutritionLoading(bool isDark) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Text('⚡', style: TextStyle(fontSize: 20)),
-              const SizedBox(width: 8),
-              Text('Calcul nutrition IA...', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? AppColors.textDark : AppColors.textLight)),
-              const Spacer(),
-              const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
-            ],
-          ),
-        ],
-      );
-
-  Widget _imagePlaceholder() => Container(
-        color: AppColors.darkCard,
-        child: const Center(child: Icon(Icons.restaurant_rounded, size: 60, color: AppColors.primary)),
-      );
-
-  Widget _loadingScreen(bool isDark) => Scaffold(
-        backgroundColor: isDark ? AppColors.darkBg : AppColors.lightBg,
-        body: const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-      );
-
-  Widget _errorScreen(BuildContext context, bool isDark) => Scaffold(
-        backgroundColor: isDark ? AppColors.darkBg : AppColors.lightBg,
-        appBar: AppBar(leading: BackButton(onPressed: () => context.pop())),
-        body: const Center(child: Text('Recette introuvable')),
-      );
 
   String _scaleMeasure(String measure, int portions, int defaultPortions) {
     if (measure.isEmpty) return '';
     final factor = portions / (defaultPortions == 0 ? 1 : defaultPortions);
     if (factor == 1.0) return measure;
-
-    // Essaie de scaler les nombres dans la mesure
     final result = measure.replaceAllMapped(
       RegExp(r'(\d+(?:\.\d+)?)'),
       (match) {
         final val = double.tryParse(match.group(1)!);
         if (val == null) return match.group(0)!;
         final scaled = val * factor;
-        return scaled == scaled.roundToDouble() ? scaled.toInt().toString() : scaled.toStringAsFixed(1);
+        return scaled == scaled.roundToDouble()
+            ? scaled.toInt().toString()
+            : scaled.toStringAsFixed(1);
       },
     );
     return result;
@@ -713,8 +1024,7 @@ class _CollectionSheet extends ConsumerWidget {
     final collections = innerRef.watch(collectionsProvider);
     final bg = isDark ? AppColors.darkSurface : Colors.white;
     final textColor = isDark ? AppColors.textDark : AppColors.textLight;
-    final subColor =
-        isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
+    final subColor = isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
     final navBar = MediaQuery.of(context).viewPadding.bottom;
 
     return Container(
@@ -738,12 +1048,22 @@ class _CollectionSheet extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Text('Ajouter à une collection',
-              style: TextStyle(
-                  color: textColor,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700)),
-          const SizedBox(height: 12),
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 18,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [AppColors.primary, AppColors.yellow]),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text('Ajouter à une collection',
+                  style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+            ],
+          ),
+          const SizedBox(height: 14),
           if (collections.isEmpty)
             Text('Aucune collection — crée-en une depuis Mes Favoris.',
                 style: TextStyle(color: subColor, fontSize: 13))
@@ -768,8 +1088,7 @@ class _CollectionSheet extends ConsumerWidget {
                     size: 18,
                   ),
                 ),
-                title: Text(col.name,
-                    style: TextStyle(color: textColor, fontSize: 14)),
+                title: Text(col.name, style: TextStyle(color: textColor, fontSize: 14)),
                 onTap: () {
                   if (has) {
                     innerRef.read(collectionsProvider.notifier).removeRecipe(col.id, recipe.id);
@@ -783,8 +1102,7 @@ class _CollectionSheet extends ConsumerWidget {
           TextButton.icon(
             onPressed: () => context.push('/favorites'),
             icon: const Icon(Icons.favorite_rounded, color: AppColors.primary, size: 16),
-            label: const Text('Gérer les collections',
-                style: TextStyle(color: AppColors.primary)),
+            label: const Text('Gérer les collections', style: TextStyle(color: AppColors.primary)),
           ),
         ],
       ),

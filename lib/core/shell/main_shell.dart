@@ -27,7 +27,7 @@ class MainShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = ref.watch(themeProvider);
     final unchecked = ref.watch(shoppingProvider).where((i) => !i.isChecked).length;
-    final fridgeAlerts = 0; // TODO: expiry alerts
+    final fridgeAlerts = ref.watch(fridgeExpiringCountProvider);
     final current = _currentIndex(context);
 
     return Scaffold(

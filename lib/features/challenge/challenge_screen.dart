@@ -174,13 +174,30 @@ class _State extends ConsumerState<ChallengeScreen> {
   @override
   Widget build(BuildContext context) {
     final challenge = _currentChallenge;
+    final isDark = ref.watch(themeProvider);
+    final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
+    final textColor = isDark ? AppColors.textDark : AppColors.textLight;
+    final cardBg = isDark ? AppColors.darkCard : Colors.white;
 
     return Scaffold(
-      backgroundColor: AppColors.darkBg,
+      backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: AppColors.darkBg,
-        iconTheme: const IconThemeData(color: AppColors.textDark),
-        title: const Text('Défi de la semaine 🏆', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w700)),
+        backgroundColor: bg,
+        iconTheme: IconThemeData(color: textColor),
+        elevation: 0,
+        title: Row(
+          children: [
+            Container(
+              width: 4, height: 20,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [AppColors.primary, AppColors.yellow]),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text('Défi de la semaine 🏆', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 17)),
+          ],
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -273,7 +290,7 @@ class _State extends ConsumerState<ChallengeScreen> {
               const SizedBox(width: 8),
               Text(
                 '${_completions.length} cuisinier${_completions.length > 1 ? 's' : ''} ont relevé ce défi',
-                style: const TextStyle(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.w600),
+                style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -284,18 +301,18 @@ class _State extends ConsumerState<ChallengeScreen> {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: AppColors.darkCard,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.darkBorder),
+                color: cardBg,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.05), blurRadius: 12, offset: const Offset(0, 4))],
               ),
-              child: const Center(
+              child: Center(
                 child: Text('Sois le premier à relever le défi cette semaine !',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 14)),
+                    style: TextStyle(color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary, fontSize: 14)),
               ),
             )
           else
-            ...(_completions.reversed.map((c) => _CompletionCard(data: c))),
+            ...(_completions.reversed.map((c) => _CompletionCard(data: c, isDark: isDark, cardBg: cardBg))),
         ],
       ),
     );
@@ -306,21 +323,25 @@ class _State extends ConsumerState<ChallengeScreen> {
 
 class _CompletionCard extends StatelessWidget {
   final Map<String, dynamic> data;
-  const _CompletionCard({required this.data});
+  final bool isDark;
+  final Color cardBg;
+  const _CompletionCard({required this.data, required this.isDark, required this.cardBg});
 
   @override
   Widget build(BuildContext context) {
     final dt = DateTime.tryParse(data['completed_at'] as String? ?? '') ?? DateTime.now();
     final daysSince = DateTime.now().difference(dt).inDays;
     final timeLabel = daysSince == 0 ? "aujourd'hui" : 'il y a $daysSince j.';
+    final textColor = isDark ? AppColors.textDark : AppColors.textLight;
+    final subColor = isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.darkCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.darkBorder),
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.05), blurRadius: 10, offset: const Offset(0, 3))],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -343,10 +364,9 @@ class _CompletionCard extends StatelessWidget {
                 Row(
                   children: [
                     Text(data['participant_name'] as String? ?? '',
-                        style: const TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w700)),
+                        style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
                     const Spacer(),
-                    Text(timeLabel,
-                        style: const TextStyle(color: AppColors.textDarkSecondary, fontSize: 11)),
+                    Text(timeLabel, style: TextStyle(color: subColor, fontSize: 11)),
                   ],
                 ),
                 const SizedBox(height: 2),
@@ -363,8 +383,7 @@ class _CompletionCard extends StatelessWidget {
                 if ((data['note'] as String?)?.isNotEmpty == true) ...[
                   const SizedBox(height: 4),
                   Text('"${data['note']}"',
-                      style: const TextStyle(color: AppColors.textDarkSecondary, fontSize: 12,
-                          fontStyle: FontStyle.italic)),
+                      style: TextStyle(color: subColor, fontSize: 12, fontStyle: FontStyle.italic)),
                 ],
               ],
             ),

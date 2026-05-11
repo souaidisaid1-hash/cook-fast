@@ -114,6 +114,21 @@ class MealDbService {
     return data ?? [];
   }
 
+  static Future<List<Recipe>> byArea(String area) async {
+    try {
+      final res = await _client.get(
+          Uri.parse('${ApiConstants.mealDbBase}/filter.php?a=$area'));
+      if (res.statusCode != 200) return [];
+      final data = jsonDecode(res.body);
+      final meals = (data['meals'] as List?) ?? [];
+      final ids = meals.take(10).map((m) => m['idMeal'].toString()).toList();
+      final recipes = await Future.wait(ids.map((id) => byId(id)));
+      return recipes.whereType<Recipe>().toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   static Future<List<Recipe>> random10() async {
     final results = await Future.wait(List.generate(10, (_) => random()));
     return results.whereType<Recipe>().toList();

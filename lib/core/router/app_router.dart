@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/cooking/cooking_screen.dart';
@@ -34,6 +35,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     initialLocation: isOnboarded ? '/home' : '/onboarding',
+    observers: [SentryNavigatorObserver()],
     redirect: (context, state) {
       final onboarded = ref.read(onboardedProvider);
       if (!onboarded && state.matchedLocation != '/onboarding') return '/onboarding';

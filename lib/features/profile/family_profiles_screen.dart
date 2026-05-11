@@ -18,19 +18,38 @@ class FamilyProfilesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = ref.watch(themeProvider);
     final members = ref.watch(familyProfilesProvider);
     final notifier = ref.read(familyProfilesProvider.notifier);
+    final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
+    final textColor = isDark ? AppColors.textDark : AppColors.textLight;
 
     return Scaffold(
-      backgroundColor: AppColors.darkBg,
+      backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: AppColors.darkBg,
-        iconTheme: const IconThemeData(color: AppColors.textDark),
-        title: const Text('Profils Famille', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w700)),
+        backgroundColor: bg,
+        iconTheme: IconThemeData(color: textColor),
+        elevation: 0,
+        title: Row(
+          children: [
+            Container(
+              width: 4, height: 20,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.blue, Color(0xFF2980B9)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text('Profils Famille 👨‍👩‍👧', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 17)),
+          ],
+        ),
       ),
       body: Column(
         children: [
-          // Info banner
           Container(
             margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             padding: const EdgeInsets.all(14),
@@ -43,25 +62,25 @@ class FamilyProfilesScreen extends ConsumerWidget {
               children: [
                 const Text('👨‍👩‍👧', style: TextStyle(fontSize: 22)),
                 const SizedBox(width: 10),
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Les recettes incompatibles avec votre famille seront signalées avec ⚠️',
-                    style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 13, height: 1.4),
+                    style: TextStyle(color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary, fontSize: 13, height: 1.4),
                   ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 8),
-
           Expanded(
             child: members.isEmpty
-                ? _buildEmpty()
+                ? _buildEmpty(isDark, textColor)
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                     itemCount: members.length,
                     itemBuilder: (_, i) => _MemberCard(
                       member: members[i],
+                      isDark: isDark,
                       onToggle: () => notifier.toggleActive(members[i].id),
                       onEdit: () => _openSheet(context, ref, existing: members[i]),
                       onDelete: () => notifier.remove(members[i].id),
@@ -74,15 +93,24 @@ class FamilyProfilesScreen extends ConsumerWidget {
           ? SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: ElevatedButton.icon(
-                  onPressed: () => _openSheet(context, ref),
-                  icon: const Icon(Icons.person_add_rounded),
-                  label: const Text('Ajouter un membre', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
+                child: GestureDetector(
+                  onTap: () => _openSheet(context, ref),
+                  child: Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [AppColors.primary, AppColors.yellow]),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.35), blurRadius: 16, offset: const Offset(0, 6))],
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.person_add_rounded, color: Colors.white, size: 18),
+                        SizedBox(width: 8),
+                        Text('Ajouter un membre', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -91,18 +119,25 @@ class FamilyProfilesScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildEmpty() => Center(
+  Widget _buildEmpty(bool isDark, Color textColor) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('👨‍👩‍👧‍👦', style: TextStyle(fontSize: 56)),
-            const SizedBox(height: 16),
-            const Text('Aucun profil famille', style: TextStyle(color: AppColors.textDark, fontSize: 18, fontWeight: FontWeight.w700)),
+            Container(
+              width: 90, height: 90,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [AppColors.blue.withValues(alpha: 0.15), AppColors.primary.withValues(alpha: 0.08)]),
+                shape: BoxShape.circle,
+              ),
+              child: const Center(child: Text('👨‍👩‍👧‍👦', style: TextStyle(fontSize: 40))),
+            ),
+            const SizedBox(height: 20),
+            Text('Aucun profil famille', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Ajoutez les membres de votre famille\npour filtrer les recettes compatibles.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 14, height: 1.5),
+              style: TextStyle(color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary, fontSize: 14, height: 1.5),
             ),
           ],
         ),
@@ -122,12 +157,14 @@ class FamilyProfilesScreen extends ConsumerWidget {
 
 class _MemberCard extends StatelessWidget {
   final FamilyMember member;
+  final bool isDark;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _MemberCard({
     required this.member,
+    required this.isDark,
     required this.onToggle,
     required this.onEdit,
     required this.onDelete,
@@ -143,11 +180,12 @@ class _MemberCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.darkCard,
+          color: isDark ? AppColors.darkCard : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: member.isActive ? AppColors.primary.withValues(alpha: 0.3) : AppColors.darkBorder,
+            color: member.isActive ? AppColors.primary.withValues(alpha: 0.3) : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
           ),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.06), blurRadius: 12, offset: const Offset(0, 4))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,7 +208,7 @@ class _MemberCard extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Text(member.name, style: const TextStyle(color: AppColors.textDark, fontSize: 16, fontWeight: FontWeight.w700)),
+                          Text(member.name, style: TextStyle(color: isDark ? AppColors.textDark : AppColors.textLight, fontSize: 16, fontWeight: FontWeight.w700)),
                           if (member.isChild) ...[
                             const SizedBox(width: 8),
                             Container(
@@ -189,7 +227,7 @@ class _MemberCard extends StatelessWidget {
                         children: [
                           Text(dietEntry.$3, style: const TextStyle(fontSize: 12)),
                           const SizedBox(width: 4),
-                          Text(dietEntry.$2, style: const TextStyle(color: AppColors.textDarkSecondary, fontSize: 12)),
+                          Text(dietEntry.$2, style: TextStyle(color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary, fontSize: 12)),
                         ],
                       ),
                     ],
@@ -198,9 +236,9 @@ class _MemberCard extends StatelessWidget {
                 Switch(
                   value: member.isActive,
                   onChanged: (_) => onToggle(),
-                  activeColor: AppColors.primary,
-                  inactiveThumbColor: AppColors.darkBorder,
-                  inactiveTrackColor: AppColors.darkSurface,
+                  activeThumbColor: AppColors.primary,
+                  inactiveThumbColor: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                  inactiveTrackColor: isDark ? AppColors.darkSurface : const Color(0xFFE0DDD8),
                 ),
               ],
             ),
@@ -224,7 +262,7 @@ class _MemberCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                _iconBtn(Icons.edit_outlined, AppColors.textDarkSecondary, onEdit),
+                _iconBtn(Icons.edit_outlined, isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary, onEdit),
                 const SizedBox(width: 8),
                 _iconBtn(Icons.delete_outline, Colors.red.withValues(alpha: 0.7), onDelete),
               ],
@@ -320,12 +358,17 @@ class _MemberSheetState extends State<_MemberSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = widget.ref.read(themeProvider);
+    final sheetBg = isDark ? AppColors.darkCard : Colors.white;
+    final textColor = isDark ? AppColors.textDark : AppColors.textLight;
+    final subColor = isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
     final insets = MediaQuery.of(context).viewInsets.bottom;
     final navBar = MediaQuery.of(context).viewPadding.bottom;
+
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.darkCard,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: sheetBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + insets + navBar),
       child: SingleChildScrollView(
@@ -334,17 +377,16 @@ class _MemberSheetState extends State<_MemberSheet> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Center(
-              child: Container(width: 36, height: 4, decoration: BoxDecoration(color: AppColors.darkBorder, borderRadius: BorderRadius.circular(2))),
+              child: Container(width: 36, height: 4, decoration: BoxDecoration(color: isDark ? AppColors.darkBorder : AppColors.lightBorder, borderRadius: BorderRadius.circular(2))),
             ),
             const SizedBox(height: 20),
             Text(
               widget.existing != null ? 'Modifier le profil' : 'Nouveau membre',
-              style: const TextStyle(color: AppColors.textDark, fontSize: 18, fontWeight: FontWeight.w700),
+              style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 20),
 
-            // Emoji picker
-            const Text('Avatar', style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+            Text('Avatar', style: TextStyle(color: subColor, fontSize: 13, fontWeight: FontWeight.w500)),
             const SizedBox(height: 8),
             SizedBox(
               height: 48,
@@ -362,7 +404,7 @@ class _MemberSheetState extends State<_MemberSheet> {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: selected ? AppColors.primary.withValues(alpha: 0.2) : AppColors.darkSurface,
+                        color: selected ? AppColors.primary.withValues(alpha: 0.2) : (isDark ? AppColors.darkSurface : const Color(0xFFF5F2EE)),
                         shape: BoxShape.circle,
                         border: Border.all(color: selected ? AppColors.primary : Colors.transparent, width: 2),
                       ),
@@ -374,19 +416,17 @@ class _MemberSheetState extends State<_MemberSheet> {
             ),
             const SizedBox(height: 16),
 
-            // Name
             TextField(
               controller: _nameCtrl,
-              style: const TextStyle(color: AppColors.textDark),
-              decoration: const InputDecoration(
+              style: TextStyle(color: textColor),
+              decoration: InputDecoration(
                 labelText: 'Prénom',
-                labelStyle: TextStyle(color: AppColors.textDarkSecondary),
+                labelStyle: TextStyle(color: subColor),
               ),
             ),
             const SizedBox(height: 16),
 
-            // Diet
-            const Text('Régime alimentaire', style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+            Text('Régime alimentaire', style: TextStyle(color: subColor, fontSize: 13, fontWeight: FontWeight.w500)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -399,13 +439,13 @@ class _MemberSheetState extends State<_MemberSheet> {
                     duration: const Duration(milliseconds: 150),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: selected ? AppColors.primary.withValues(alpha: 0.2) : AppColors.darkSurface,
+                      color: selected ? AppColors.primary.withValues(alpha: 0.2) : (isDark ? AppColors.darkSurface : const Color(0xFFF5F2EE)),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: selected ? AppColors.primary : AppColors.darkBorder),
+                      border: Border.all(color: selected ? AppColors.primary : (isDark ? AppColors.darkBorder : AppColors.lightBorder)),
                     ),
                     child: Text(
                       '${d.$3} ${d.$2}',
-                      style: TextStyle(color: selected ? AppColors.primary : AppColors.textDarkSecondary, fontSize: 13, fontWeight: FontWeight.w500),
+                      style: TextStyle(color: selected ? AppColors.primary : subColor, fontSize: 13, fontWeight: FontWeight.w500),
                     ),
                   ),
                 );
@@ -413,7 +453,6 @@ class _MemberSheetState extends State<_MemberSheet> {
             ),
             const SizedBox(height: 16),
 
-            // Is child
             GestureDetector(
               onTap: () => setState(() => _isChild = !_isChild),
               child: Row(
@@ -425,31 +464,30 @@ class _MemberSheetState extends State<_MemberSheet> {
                     decoration: BoxDecoration(
                       color: _isChild ? AppColors.primary : Colors.transparent,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: _isChild ? AppColors.primary : AppColors.darkBorder, width: 2),
+                      border: Border.all(color: _isChild ? AppColors.primary : (isDark ? AppColors.darkBorder : AppColors.lightBorder), width: 2),
                     ),
                     child: _isChild ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
                   ),
                   const SizedBox(width: 10),
-                  const Text('Enfant (moins de 12 ans)', style: TextStyle(color: AppColors.textDark, fontSize: 14)),
+                  Text('Enfant (moins de 12 ans)', style: TextStyle(color: textColor, fontSize: 14)),
                 ],
               ),
             ),
             const SizedBox(height: 16),
 
-            // Allergies
-            const Text('Allergies / ingrédients à éviter', style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+            Text('Allergies / ingrédients à éviter', style: TextStyle(color: subColor, fontSize: 13, fontWeight: FontWeight.w500)),
             const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _allergyCtrl,
-                    style: const TextStyle(color: AppColors.textDark, fontSize: 14),
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: textColor, fontSize: 14),
+                    decoration: InputDecoration(
                       hintText: 'ex: arachides, lactose...',
-                      hintStyle: TextStyle(color: AppColors.textDarkSecondary, fontSize: 13),
+                      hintStyle: TextStyle(color: subColor, fontSize: 13),
                       isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
                     onSubmitted: (_) => _addAllergy(),
                   ),
@@ -495,17 +533,31 @@ class _MemberSheetState extends State<_MemberSheet> {
 
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _nameCtrl.text.trim().isNotEmpty ? _save : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
+              child: GestureDetector(
+                onTap: _nameCtrl.text.trim().isNotEmpty ? _save : null,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-                child: Text(
-                  widget.existing != null ? 'Enregistrer' : 'Ajouter le membre',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  decoration: BoxDecoration(
+                    gradient: _nameCtrl.text.trim().isNotEmpty
+                        ? const LinearGradient(colors: [AppColors.primary, AppColors.yellow])
+                        : null,
+                    color: _nameCtrl.text.trim().isEmpty ? (isDark ? AppColors.darkBorder : AppColors.lightBorder) : null,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: _nameCtrl.text.trim().isNotEmpty
+                        ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.35), blurRadius: 16, offset: const Offset(0, 6))]
+                        : [],
+                  ),
+                  child: Center(
+                    child: Text(
+                      widget.existing != null ? 'Enregistrer' : 'Ajouter le membre',
+                      style: TextStyle(
+                        color: _nameCtrl.text.trim().isNotEmpty ? Colors.white : subColor,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),

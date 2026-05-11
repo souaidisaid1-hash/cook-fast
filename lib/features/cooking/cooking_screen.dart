@@ -10,8 +10,8 @@ class CookingScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = ref.watch(themeProvider);
-    final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
-    final cardBg = isDark ? AppColors.darkCard : AppColors.lightCard;
+    final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
+    final cardBg = isDark ? AppColors.darkCard : Colors.white;
     final textColor = isDark ? AppColors.textDark : AppColors.textLight;
 
     return Scaffold(
@@ -22,10 +22,25 @@ class CookingScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Mode Cuisson 🍳', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: textColor)),
+              Row(
+                children: [
+                  Container(
+                    width: 4, height: 26,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [AppColors.primary, AppColors.yellow], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text('Mode Cuisson 🍳', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor)),
+                ],
+              ),
               const SizedBox(height: 4),
-              const Text('Choisis comment tu veux cuisiner', style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 14)),
-              const SizedBox(height: 28),
+              Padding(
+                padding: const EdgeInsets.only(left: 14),
+                child: Text('Choisis comment tu veux cuisiner', style: TextStyle(color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary, fontSize: 13)),
+              ),
+              const SizedBox(height: 24),
 
               // Batch Cooking — featured
               GestureDetector(
@@ -124,20 +139,33 @@ class CookingScreen extends ConsumerWidget {
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             color: cardBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.darkBorder),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Row(
             children: [
-              Text(emoji, style: const TextStyle(fontSize: 32)),
+              Container(
+                width: 50, height: 50,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Center(child: Text(emoji, style: const TextStyle(fontSize: 26))),
+              ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(color: AppColors.textDark, fontSize: 16, fontWeight: FontWeight.w700)),
+                    Text(title, style: TextStyle(color: cardBg == Colors.white ? const Color(0xFF1A1A1A) : AppColors.textDark, fontSize: 15, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 4),
-                    Text(subtitle, style: const TextStyle(color: AppColors.textDarkSecondary, fontSize: 12, height: 1.4)),
+                    Text(subtitle, style: TextStyle(color: cardBg == Colors.white ? const Color(0xFF6B6B6B) : AppColors.textDarkSecondary, fontSize: 12, height: 1.4)),
                     const SizedBox(height: 6),
                     Text(hint, style: const TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w500)),
                   ],

@@ -56,8 +56,8 @@ class StatsScreen extends ConsumerWidget {
         plan.values.expand((s) => s.values).where((r) => r != null).length;
     final planRate = totalSlots == 0 ? 0.0 : filledSlots / totalSlots;
 
-    final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
-    final cardColor = isDark ? AppColors.darkCard : AppColors.lightCard;
+    final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
+    final cardColor = isDark ? AppColors.darkCard : Colors.white;
     final textColor = isDark ? AppColors.textDark : AppColors.textLight;
     final subColor =
         isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;

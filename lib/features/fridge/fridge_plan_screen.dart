@@ -34,7 +34,7 @@ class _FridgePlanScreenState extends ConsumerState<FridgePlanScreen> {
   }
 
   Future<void> _generate() async {
-    final fridge = ref.read(fridgeProvider);
+    final fridge = ref.read(fridgeProvider).map((i) => i.name).toList();
     final profile = ref.read(userProfileProvider);
 
     setState(() {
@@ -88,7 +88,7 @@ class _FridgePlanScreenState extends ConsumerState<FridgePlanScreen> {
     }
 
     // Step 3: Compute missing ingredients
-    final fridgeLower = ref.read(fridgeProvider).map((i) => i.toLowerCase()).toSet();
+    final fridgeLower = ref.read(fridgeProvider).map((i) => i.name.toLowerCase()).toSet();
     final missing = allIngredients
         .where((ing) => ing.isNotEmpty && !fridgeLower.any((f) => ing.contains(f) || f.contains(ing)))
         .take(20)
@@ -135,8 +135,8 @@ class _FridgePlanScreenState extends ConsumerState<FridgePlanScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(themeProvider);
-    final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
-    final cardColor = isDark ? AppColors.darkCard : AppColors.lightCard;
+    final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
+    final cardColor = isDark ? AppColors.darkCard : Colors.white;
     final textColor = isDark ? AppColors.textDark : AppColors.textLight;
     final subColor = isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
     final navBar = MediaQuery.of(context).viewPadding.bottom;
@@ -146,15 +146,26 @@ class _FridgePlanScreenState extends ConsumerState<FridgePlanScreen> {
       appBar: AppBar(
         backgroundColor: bg,
         iconTheme: IconThemeData(color: textColor),
-        title: Text('Plan IA depuis frigo 🧊',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: textColor)),
         elevation: 0,
+        title: Row(
+          children: [
+            Container(
+              width: 4, height: 20,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [AppColors.blue, AppColors.green], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text('Plan IA depuis frigo 🧊', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 17)),
+          ],
+        ),
       ),
       body: _error != null
           ? _buildError(textColor, subColor)
           : _plan == null
               ? _buildLoading(textColor, subColor, isDark)
-              : _buildResult(cardColor, textColor, subColor, isDark, navBar),
+              : _buildResult(cardColor, textColor, subColor, isDark, navBar, bg),
     );
   }
 
@@ -216,7 +227,7 @@ class _FridgePlanScreenState extends ConsumerState<FridgePlanScreen> {
     );
   }
 
-  Widget _buildResult(Color cardColor, Color textColor, Color subColor, bool isDark, double navBar) {
+  Widget _buildResult(Color cardColor, Color textColor, Color subColor, bool isDark, double navBar, Color bg) {
     final plan = _plan!;
     final filledCount = plan.values
         .expand((s) => s.values)
@@ -231,16 +242,16 @@ class _FridgePlanScreenState extends ConsumerState<FridgePlanScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Summary banner
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFF1a3a1a), Color(0xFF0d200d)],
+                      colors: [AppColors.green, Color(0xFF27AE60)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(16),
+                    boxShadow: [BoxShadow(color: AppColors.green.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))],
                   ),
                   child: Row(
                     children: [
@@ -250,15 +261,8 @@ class _FridgePlanScreenState extends ConsumerState<FridgePlanScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('$filledCount repas générés',
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700)),
-                            Text(
-                                'Basé sur ${ref.read(fridgeProvider).length} ingrédients du frigo',
-                                style: const TextStyle(
-                                    color: Colors.white70, fontSize: 12)),
+                            Text('$filledCount repas générés', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                            Text('Basé sur ${ref.read(fridgeProvider).length} ingrédients du frigo', style: const TextStyle(color: Colors.white70, fontSize: 12)),
                           ],
                         ),
                       ),
@@ -323,8 +327,7 @@ class _FridgePlanScreenState extends ConsumerState<FridgePlanScreen> {
                                     ),
                                   ),
                                   if (recipe != null)
-                                    const Icon(Icons.chevron_right,
-                                        size: 16, color: AppColors.textDarkSecondary),
+                                    Icon(Icons.chevron_right, size: 16, color: subColor),
                                 ],
                               ),
                             ),
@@ -392,44 +395,52 @@ class _FridgePlanScreenState extends ConsumerState<FridgePlanScreen> {
           ),
         ),
 
-        // Bottom CTAs
         Container(
           padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + navBar),
           decoration: BoxDecoration(
-            color: isDark ? AppColors.darkBg : AppColors.lightBg,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 12,
-                offset: const Offset(0, -4),
-              ),
-            ],
+            color: bg,
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.06), blurRadius: 12, offset: const Offset(0, -4))],
           ),
           child: Row(
             children: [
-              OutlinedButton.icon(
-                onPressed: _generate,
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text('Regénérer'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.textDarkSecondary,
-                  side: const BorderSide(color: AppColors.darkBorder),
-                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              GestureDetector(
+                onTap: _generate,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.darkCard : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.refresh_rounded, size: 18, color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary),
+                      const SizedBox(width: 6),
+                      Text('Regénérer', style: TextStyle(color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary, fontSize: 14)),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _applyPlan,
-                  icon: const Text('📅', style: TextStyle(fontSize: 16)),
-                  label: const Text('Appliquer au plan',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
+                child: GestureDetector(
+                  onTap: _applyPlan,
+                  child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [AppColors.primary, AppColors.yellow]),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4))],
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('📅', style: TextStyle(fontSize: 16)),
+                        SizedBox(width: 8),
+                        Text('Appliquer au plan', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
                   ),
                 ),
               ),

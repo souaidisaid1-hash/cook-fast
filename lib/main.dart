@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/api_constants.dart';
 import 'shared/services/notification_service.dart';
@@ -21,8 +21,6 @@ void main() async {
     statusBarIconBrightness: Brightness.light,
   ));
 
-  await dotenv.load(fileName: '.env');
-
   await Supabase.initialize(
     url: ApiConstants.supabaseUrl,
     anonKey: ApiConstants.supabaseAnonKey,
@@ -38,9 +36,17 @@ void main() async {
     Hive.openBox('skills'),
     Hive.openBox('journal'),
     Hive.openBox('family'),
+    Hive.openBox('translations'),
   ]);
 
   await NotificationService.init();
 
-  runApp(const ProviderScope(child: CookFastApp()));
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = ApiConstants.sentryDsn;
+      options.tracesSampleRate = 0.2;
+      options.enableAutoSessionTracking = true;
+    },
+    appRunner: () => runApp(const ProviderScope(child: CookFastApp())),
+  );
 }

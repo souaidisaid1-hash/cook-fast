@@ -72,21 +72,17 @@ class IngredientSearchScreen extends ConsumerStatefulWidget {
   const IngredientSearchScreen({super.key});
 
   @override
-  ConsumerState<IngredientSearchScreen> createState() =>
-      _IngredientSearchScreenState();
+  ConsumerState<IngredientSearchScreen> createState() => _IngredientSearchScreenState();
 }
 
-class _IngredientSearchScreenState
-    extends ConsumerState<IngredientSearchScreen> {
+class _IngredientSearchScreenState extends ConsumerState<IngredientSearchScreen> {
   final _ctrl = TextEditingController();
   final _focus = FocusNode();
 
-  // Filters state
   final List<String> _ingredients = [];
   String? _selectedCategory;
   _DurationFilter _duration = _DurationFilter.any;
 
-  // Results
   List<Recipe> _results = [];
   List<int> _scores = [];
   bool _loading = false;
@@ -99,8 +95,6 @@ class _IngredientSearchScreenState
     super.dispose();
   }
 
-  // ── Ingredient tags ──────────────────────────────────────────────────────────
-
   void _addIngredient(String val) {
     final t = val.trim();
     if (t.isEmpty) return;
@@ -110,26 +104,21 @@ class _IngredientSearchScreenState
     _focus.requestFocus();
   }
 
-  void _removeIngredient(String tag) =>
-      setState(() => _ingredients.remove(tag));
+  void _removeIngredient(String tag) => setState(() => _ingredients.remove(tag));
 
   void _useFridge() {
     final fridge = ref.read(fridgeProvider);
     setState(() {
-      for (final ing in fridge) {
-        if (!_ingredients.any((i) => i.toLowerCase() == ing.toLowerCase())) {
-          _ingredients.add(ing);
+      for (final item in fridge) {
+        if (!_ingredients.any((i) => i.toLowerCase() == item.name.toLowerCase())) {
+          _ingredients.add(item.name);
         }
       }
     });
   }
 
-  // ── Search ───────────────────────────────────────────────────────────────────
-
   bool get _hasFilters =>
-      _ingredients.isNotEmpty ||
-      _selectedCategory != null ||
-      _duration != _DurationFilter.any;
+      _ingredients.isNotEmpty || _selectedCategory != null || _duration != _DurationFilter.any;
 
   Future<void> _search() async {
     FocusScope.of(context).unfocus();
@@ -139,17 +128,14 @@ class _IngredientSearchScreenState
     List<int> rawScores = [];
 
     if (_ingredients.isNotEmpty) {
-      // Search by ingredients, optionally filtered by category
       final res = await MealDbService.byIngredients(_ingredients);
       raw = res.recipes;
       rawScores = res.scores;
-      // Filter by category client-side
       if (_selectedCategory != null) {
         final filtered = <Recipe>[];
         final filteredScores = <int>[];
         for (int i = 0; i < raw.length; i++) {
-          if ((raw[i].category ?? '').toLowerCase() ==
-              _selectedCategory!.toLowerCase()) {
+          if ((raw[i].category ?? '').toLowerCase() == _selectedCategory!.toLowerCase()) {
             filtered.add(raw[i]);
             filteredScores.add(rawScores[i]);
           }
@@ -158,12 +144,10 @@ class _IngredientSearchScreenState
         rawScores = filteredScores;
       }
     } else if (_selectedCategory != null) {
-      // Search by category only
       raw = await MealDbService.byCategory(_selectedCategory!);
       rawScores = List.filled(raw.length, 1);
     }
 
-    // Apply duration filter client-side
     final finalRecipes = <Recipe>[];
     final finalScores = <int>[];
     for (int i = 0; i < raw.length; i++) {
@@ -181,153 +165,161 @@ class _IngredientSearchScreenState
     });
   }
 
-  // ── Build ────────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(themeProvider);
-    final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
-    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.lightCard;
-    final cardColor = isDark ? AppColors.darkCard : AppColors.lightCard;
+    final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
+    final cardBg = isDark ? AppColors.darkCard : Colors.white;
     final textColor = isDark ? AppColors.textDark : AppColors.textLight;
-    final subColor =
-        isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
+    final subColor = isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
     final fridge = ref.watch(fridgeProvider);
     final navBar = MediaQuery.of(context).viewPadding.bottom;
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        backgroundColor: bg,
-        iconTheme: IconThemeData(color: textColor),
-        title: Text('Recherche & Filtres',
-            style: TextStyle(
-                fontWeight: FontWeight.w700, fontSize: 17, color: textColor)),
-        elevation: 0,
-      ),
       body: Column(
         children: [
-          // ── Filters panel ───────────────────────────────────────────────────
+          // ── Header ──────────────────────────────────────────────────────────
           Container(
-            color: surfaceColor,
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            color: bg,
+            padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 14, 20, 14),
+            child: Row(
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 4, height: 22,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [AppColors.primary, AppColors.yellow],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text('Recherche', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: textColor)),
+                      ],
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 14),
+                      child: Text('Filtre par ingrédients & type',
+                          style: TextStyle(fontSize: 12, color: subColor)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // ── Filter panel ─────────────────────────────────────────────────────
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.06),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Ingredient input ─────────────────────────────────────────
+                // ── Ingredient input ───────────────────────────────────────────
                 Row(
                   children: [
                     Expanded(
-                      child: TextField(
-                        controller: _ctrl,
-                        focusNode: _focus,
-                        style: TextStyle(color: textColor, fontSize: 14),
-                        textCapitalization: TextCapitalization.sentences,
-                        decoration: InputDecoration(
-                          hintText: 'Ajouter un ingrédient…',
-                          hintStyle:
-                              TextStyle(color: subColor, fontSize: 14),
-                          filled: true,
-                          fillColor: bg,
-                          prefixIcon: const Icon(Icons.egg_alt_rounded,
-                              color: AppColors.primary, size: 20),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 10),
-                          isDense: true,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: bg,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
                         ),
-                        onSubmitted: _addIngredient,
+                        child: TextField(
+                          controller: _ctrl,
+                          focusNode: _focus,
+                          style: TextStyle(color: textColor, fontSize: 14),
+                          textCapitalization: TextCapitalization.sentences,
+                          decoration: InputDecoration(
+                            hintText: 'Ajouter un ingrédient…',
+                            hintStyle: TextStyle(color: subColor, fontSize: 14),
+                            prefixIcon: const Icon(Icons.egg_alt_rounded, color: AppColors.primary, size: 20),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                            isDense: true,
+                          ),
+                          onSubmitted: _addIngredient,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    _PillBtn(
-                      label: '+',
-                      color: AppColors.primary,
-                      onTap: () => _addIngredient(_ctrl.text),
-                    ),
+                    _iconBtn(Icons.add_rounded, AppColors.primary, () => _addIngredient(_ctrl.text)),
                     if (fridge.isNotEmpty) ...[
                       const SizedBox(width: 6),
-                      _PillBtn(
-                        label: '🧊',
-                        color: AppColors.blue,
-                        onTap: _useFridge,
-                      ),
+                      _emojiBtn('🧊', AppColors.blue, _useFridge),
                     ],
                   ],
                 ),
 
                 // Ingredient tags
                 if (_ingredients.isNotEmpty) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Wrap(
                     spacing: 6,
                     runSpacing: 6,
-                    children: _ingredients
-                        .map((t) => _Tag(
-                              label: t,
-                              color: AppColors.primary,
-                              onRemove: () => _removeIngredient(t),
-                            ))
-                        .toList(),
+                    children: _ingredients.map((t) => _IngTag(label: t, onRemove: () => _removeIngredient(t))).toList(),
                   ),
                 ],
 
+                const SizedBox(height: 14),
+                _accentDivider(isDark),
                 const SizedBox(height: 12),
-                _divider(isDark),
-                const SizedBox(height: 10),
 
-                // ── Type filter ──────────────────────────────────────────────
-                Text('Type',
-                    style: TextStyle(
-                        color: subColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8)),
+                // ── Type filter ────────────────────────────────────────────────
+                _filterLabel('TYPE DE PLAT', subColor),
                 const SizedBox(height: 8),
                 SizedBox(
                   height: 34,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: _kCategories.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 6),
+                    separatorBuilder: (_, _) => const SizedBox(width: 6),
                     itemBuilder: (_, i) {
                       final cat = _kCategories[i];
                       final selected = _selectedCategory == cat.$2;
                       return GestureDetector(
-                        onTap: () => setState(() {
-                          _selectedCategory =
-                              selected ? null : cat.$2;
-                        }),
+                        onTap: () => setState(() => _selectedCategory = selected ? null : cat.$2),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 150),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: selected
-                                ? AppColors.green.withValues(alpha: 0.18)
-                                : bg,
+                            gradient: selected
+                                ? const LinearGradient(colors: [AppColors.green, Color(0xFF27AE60)])
+                                : null,
+                            color: selected ? null : bg,
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: selected
-                                  ? AppColors.green
-                                  : (isDark
-                                      ? AppColors.darkBorder
-                                      : AppColors.lightBorder),
+                              color: selected ? Colors.transparent : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
                             ),
+                            boxShadow: selected
+                                ? [BoxShadow(color: AppColors.green.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2))]
+                                : null,
                           ),
                           child: Text(
                             '${cat.$1} ${cat.$2}',
                             style: TextStyle(
-                              color: selected
-                                  ? AppColors.green
-                                  : textColor,
+                              color: selected ? Colors.white : textColor,
                               fontSize: 12,
-                              fontWeight: selected
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
+                              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                             ),
                           ),
                         ),
@@ -336,118 +328,119 @@ class _IngredientSearchScreenState
                   ),
                 ),
 
-                const SizedBox(height: 10),
-                _divider(isDark),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
+                _accentDivider(isDark),
+                const SizedBox(height: 12),
 
-                // ── Duration filter ──────────────────────────────────────────
+                // ── Duration filter ────────────────────────────────────────────
                 Row(
                   children: [
-                    Text('Durée',
-                        style: TextStyle(
-                            color: subColor,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.8)),
+                    _filterLabel('DURÉE', subColor),
                     const SizedBox(width: 12),
-                    ..._DurationFilter.values.map((f) {
-                      final selected = _duration == f;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: GestureDetector(
-                          onTap: () => setState(() => _duration = f),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 150),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: selected
-                                  ? AppColors.yellow.withValues(alpha: 0.18)
-                                  : bg,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: selected
-                                    ? AppColors.yellow
-                                    : (isDark
-                                        ? AppColors.darkBorder
-                                        : AppColors.lightBorder),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: _DurationFilter.values.map((f) {
+                            final selected = _duration == f;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: GestureDetector(
+                                onTap: () => setState(() => _duration = f),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 150),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    gradient: selected
+                                        ? const LinearGradient(colors: [AppColors.primary, AppColors.yellow])
+                                        : null,
+                                    color: selected ? null : bg,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: selected ? Colors.transparent : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                                    ),
+                                    boxShadow: selected
+                                        ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2))]
+                                        : null,
+                                  ),
+                                  child: Text(
+                                    f.label,
+                                    style: TextStyle(
+                                      color: selected ? Colors.white : textColor,
+                                      fontSize: 12,
+                                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                            child: Text(
-                              f.label,
-                              style: TextStyle(
-                                color: selected
-                                    ? AppColors.yellow
-                                    : textColor,
-                                fontSize: 12,
-                                fontWeight: selected
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                              ),
-                            ),
-                          ),
+                            );
+                          }).toList(),
                         ),
-                      );
-                    }),
+                      ),
+                    ),
                   ],
                 ),
 
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
 
-                // ── Search button ────────────────────────────────────────────
+                // ── Search button ──────────────────────────────────────────────
                 Row(
                   children: [
                     if (_hasFilters)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: GestureDetector(
-                          onTap: () => setState(() {
-                            _ingredients.clear();
-                            _selectedCategory = null;
-                            _duration = _DurationFilter.any;
-                            _searched = false;
-                          }),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: Colors.red.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                  color: Colors.red.withValues(alpha: 0.3)),
-                            ),
-                            child: const Text('Effacer',
-                                style: TextStyle(
-                                    color: Colors.red,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600)),
+                      GestureDetector(
+                        onTap: () => setState(() {
+                          _ingredients.clear();
+                          _selectedCategory = null;
+                          _duration = _DurationFilter.any;
+                          _searched = false;
+                        }),
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
                           ),
+                          child: const Text('Effacer',
+                              style: TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w600)),
                         ),
                       ),
                     Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: (!_hasFilters || _loading) ? null : _search,
-                        icon: _loading
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.search_rounded, size: 18),
-                        label: Text(
-                          _loading ? 'Recherche…' : 'Rechercher',
-                          style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w700),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          disabledBackgroundColor: isDark
-                              ? AppColors.darkBorder
-                              : AppColors.lightBorder,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                      child: GestureDetector(
+                        onTap: (!_hasFilters || _loading) ? null : _search,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          height: 50,
+                          decoration: BoxDecoration(
+                            gradient: _hasFilters && !_loading
+                                ? const LinearGradient(colors: [AppColors.primary, AppColors.yellow])
+                                : null,
+                            color: !_hasFilters || _loading
+                                ? (isDark ? AppColors.darkBorder : AppColors.lightBorder)
+                                : null,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: _hasFilters && !_loading
+                                ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4))]
+                                : null,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              if (_loading)
+                                const SizedBox(
+                                  width: 18, height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              else
+                                const Icon(Icons.search_rounded, size: 18, color: Colors.white),
+                              const SizedBox(width: 8),
+                              Text(
+                                _loading ? 'Recherche…' : 'Rechercher',
+                                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -460,40 +453,99 @@ class _IngredientSearchScreenState
           // ── Results ──────────────────────────────────────────────────────────
           Expanded(
             child: !_searched
-                ? _buildIdle(textColor, subColor)
+                ? _buildIdle(textColor, subColor, isDark)
                 : _results.isEmpty
                     ? _buildNoResults(textColor, subColor)
-                    : _buildGrid(cardColor, textColor, subColor, isDark, navBar),
+                    : _buildGrid(textColor, subColor, isDark, navBar),
           ),
         ],
       ),
     );
   }
 
-  Widget _divider(bool isDark) => Container(
-        height: 1,
-        color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+  static Widget _filterLabel(String text, Color subColor) => Text(
+        text,
+        style: TextStyle(color: subColor, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.8),
       );
 
-  Widget _buildIdle(Color textColor, Color subColor) => Center(
+  static Widget _accentDivider(bool isDark) => Container(
+        height: 1,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppColors.primary.withValues(alpha: 0.3), Colors.transparent],
+          ),
+        ),
+      );
+
+  static Widget _iconBtn(IconData icon, Color color, VoidCallback onTap) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(colors: [color, AppColors.yellow]),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2))],
+          ),
+          child: Icon(icon, color: Colors.white, size: 22),
+        ),
+      );
+
+  static Widget _emojiBtn(String emoji, Color color, VoidCallback onTap) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withValues(alpha: 0.35)),
+          ),
+          child: Center(child: Text(emoji, style: const TextStyle(fontSize: 18))),
+        ),
+      );
+
+  Widget _buildIdle(Color textColor, Color subColor, bool isDark) => Center(
         child: Padding(
           padding: const EdgeInsets.all(40),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('🔍', style: TextStyle(fontSize: 52)),
-              const SizedBox(height: 16),
+              Container(
+                width: 90, height: 90,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [AppColors.primary.withValues(alpha: 0.15), AppColors.yellow.withValues(alpha: 0.08)],
+                  ),
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(child: Text('🔍', style: TextStyle(fontSize: 40))),
+              ),
+              const SizedBox(height: 20),
               Text('Recherche avancée',
-                  style: TextStyle(
-                      color: textColor,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700)),
+                  style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
               Text(
                 'Combine ingrédients, type de plat\net durée de préparation.',
-                style:
-                    TextStyle(color: subColor, fontSize: 14, height: 1.5),
+                style: TextStyle(color: subColor, fontSize: 14, height: 1.5),
                 textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: ['🥩 Viande', '🥗 Légumes', '🍝 Pâtes', '🐟 Poisson']
+                    .map((t) => Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                            borderRadius: BorderRadius.circular(20),
+                            color: isDark ? AppColors.darkCard : Colors.white,
+                          ),
+                          child: Text(t, style: TextStyle(color: subColor, fontSize: 12, fontWeight: FontWeight.w500)),
+                        ))
+                    .toList(),
               ),
             ],
           ),
@@ -509,12 +561,9 @@ class _IngredientSearchScreenState
               const Text('😕', style: TextStyle(fontSize: 48)),
               const SizedBox(height: 16),
               Text('Aucune recette trouvée',
-                  style: TextStyle(
-                      color: textColor,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700)),
+                  style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
-              Text('Essaie d\'élargir les filtres.',
+              Text("Essaie d'élargir les filtres.",
                   style: TextStyle(color: subColor, fontSize: 13),
                   textAlign: TextAlign.center),
             ],
@@ -522,47 +571,40 @@ class _IngredientSearchScreenState
         ),
       );
 
-  Widget _buildGrid(Color cardColor, Color textColor, Color subColor,
-      bool isDark, double navBar) {
+  Widget _buildGrid(Color textColor, Color subColor, bool isDark, double navBar) {
     final total = _ingredients.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
           child: Text(
             '${_results.length} recette${_results.length > 1 ? 's' : ''}',
-            style: TextStyle(
-                color: subColor,
-                fontSize: 13,
-                fontWeight: FontWeight.w600),
+            style: TextStyle(color: subColor, fontSize: 13, fontWeight: FontWeight.w600),
           ),
         ),
         Expanded(
           child: GridView.builder(
             padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + navBar),
-            gridDelegate:
-                const SliverGridDelegateWithFixedCrossAxisCount(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 0.80,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.75,
             ),
             itemCount: _results.length,
             itemBuilder: (_, i) {
               final r = _results[i];
               final dur = _estimateDuration(r.steps);
-              return _RecipeCard(
-                recipe: r,
-                matched: total > 0 ? _scores[i] : null,
-                total: total,
-                durationMin: dur,
-                isDark: isDark,
-                cardColor: cardColor,
-                textColor: textColor,
-                subColor: subColor,
-                onTap: () =>
-                    context.push('/recipe/${r.id}', extra: r),
+              return GestureDetector(
+                onTap: () => context.push('/recipe/${r.id}', extra: r),
+                child: _SearchRecipeCard(
+                  recipe: r,
+                  matched: total > 0 ? _scores[i] : null,
+                  total: total,
+                  durationMin: dur,
+                  isDark: isDark,
+                ),
               );
             },
           ),
@@ -572,203 +614,174 @@ class _IngredientSearchScreenState
   }
 }
 
-// ── Widgets ───────────────────────────────────────────────────────────────────
+// ── Ingredient tag ─────────────────────────────────────────────────────────────
 
-class _PillBtn extends StatelessWidget {
+class _IngTag extends StatelessWidget {
   final String label;
-  final Color color;
-  final VoidCallback onTap;
-  const _PillBtn(
-      {required this.label, required this.color, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-              color: color, borderRadius: BorderRadius.circular(10)),
-          child: Center(
-              child: Text(label,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700))),
-        ),
-      );
-}
-
-class _Tag extends StatelessWidget {
-  final String label;
-  final Color color;
   final VoidCallback onRemove;
-  const _Tag(
-      {required this.label, required this.color, required this.onRemove});
+  const _IngTag({required this.label, required this.onRemove});
 
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.fromLTRB(10, 5, 6, 5),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.14),
+          gradient: LinearGradient(
+            colors: [AppColors.primary.withValues(alpha: 0.15), AppColors.yellow.withValues(alpha: 0.08)],
+          ),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withValues(alpha: 0.4)),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(label,
-                style: TextStyle(
-                    color: color,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
-            const SizedBox(width: 4),
+            Text(label, style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+            const SizedBox(width: 6),
             GestureDetector(
               onTap: onRemove,
-              child: Icon(Icons.close_rounded, size: 15, color: color),
+              child: const Icon(Icons.close_rounded, size: 15, color: AppColors.primary),
             ),
           ],
         ),
       );
 }
 
-class _RecipeCard extends StatelessWidget {
+// ── Search result card ─────────────────────────────────────────────────────────
+
+class _SearchRecipeCard extends StatelessWidget {
   final Recipe recipe;
   final int? matched;
   final int total;
   final int durationMin;
   final bool isDark;
-  final Color cardColor;
-  final Color textColor;
-  final Color subColor;
-  final VoidCallback onTap;
 
-  const _RecipeCard({
+  const _SearchRecipeCard({
     required this.recipe,
     required this.matched,
     required this.total,
     required this.durationMin,
     required this.isDark,
-    required this.cardColor,
-    required this.textColor,
-    required this.subColor,
-    required this.onTap,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    final matchColor = matched == null
-        ? AppColors.green
-        : total <= 1
-            ? AppColors.green
-            : matched! == total
-                ? AppColors.green
-                : matched! >= total * 0.6
-                    ? AppColors.yellow
-                    : AppColors.primary;
+  Color get _matchColor {
+    if (matched == null || total <= 1) return AppColors.green;
+    if (matched! == total) return AppColors.green;
+    if (matched! >= total * 0.6) return AppColors.yellow;
+    return AppColors.primary;
+  }
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
+  @override
+  Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
-            color: cardColor, borderRadius: BorderRadius.circular(16)),
+          color: isDark ? AppColors.darkCard : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
         child: Stack(
           children: [
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(16)),
-                  child: recipe.imageUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl: recipe.imageUrl!,
-                          height: 108,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        )
-                      : Container(
-                          height: 108,
-                          color: isDark
-                              ? AppColors.darkBg
-                              : AppColors.lightBg,
-                          child: const Center(
-                              child: Text('🍽️',
-                                  style: TextStyle(fontSize: 30)))),
+                // Photo
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        recipe.imageUrl != null
+                            ? CachedNetworkImage(imageUrl: recipe.imageUrl!, fit: BoxFit.cover)
+                            : Container(
+                                color: isDark ? AppColors.darkBg : const Color(0xFFF5F2EE),
+                                child: const Center(child: Text('🍽️', style: TextStyle(fontSize: 32))),
+                              ),
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Colors.transparent, Colors.black.withValues(alpha: 0.55)],
+                              stops: const [0.5, 1.0],
+                            ),
+                          ),
+                        ),
+                        if (recipe.category != null)
+                          Positioned(
+                            bottom: 8,
+                            left: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.6),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                recipe.category!,
+                                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
+                // Info
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(recipe.title,
-                          style: TextStyle(
-                              color: textColor,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 5),
-                      Row(
-                        children: [
-                          // Duration badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.yellow
-                                  .withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              '⏱ ${durationMin}min',
-                              style: const TextStyle(
-                                  color: AppColors.yellow,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          if (recipe.category != null) ...[
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(recipe.category!,
-                                  style: TextStyle(
-                                      color: subColor, fontSize: 10),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
-                            ),
-                          ],
-                        ],
+                      Text(
+                        recipe.title,
+                        style: TextStyle(
+                          color: isDark ? AppColors.textDark : AppColors.textLight,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.yellow.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '⏱ ${durationMin}min',
+                          style: const TextStyle(color: AppColors.yellow, fontSize: 10, fontWeight: FontWeight.w600),
+                        ),
                       ),
                     ],
                   ),
                 ),
               ],
             ),
-            // Ingredient match badge (only when searching by ingredient)
+            // Match badge
             if (matched != null)
               Positioned(
                 top: 8,
                 right: 8,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                   decoration: BoxDecoration(
-                    color: matchColor.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(7),
+                    color: _matchColor.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [BoxShadow(color: _matchColor.withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 2))],
                   ),
                   child: Text(
                     total <= 1 ? '✓' : '$matched/$total',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800),
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800),
                   ),
                 ),
               ),
           ],
         ),
-      ),
-    );
-  }
+      );
 }

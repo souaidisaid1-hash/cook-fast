@@ -213,12 +213,26 @@ class _BatchCookScreenState extends State<BatchCookScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Cooking screens stay dark for readability in the kitchen
     return Scaffold(
       backgroundColor: AppColors.darkBg,
       appBar: AppBar(
         backgroundColor: AppColors.darkBg,
         iconTheme: const IconThemeData(color: AppColors.textDark),
-        title: const Text('Batch Cooking 🍳', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w700)),
+        elevation: 0,
+        title: Row(
+          children: [
+            Container(
+              width: 4, height: 20,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [AppColors.primary, AppColors.yellow], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text('Batch Cooking 🍳', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w800, fontSize: 17)),
+          ],
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),

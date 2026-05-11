@@ -1,11 +1,15 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import '../../core/constants/api_constants.dart';
 import '../models/recipe.dart';
+import '../models/translated_content.dart';
 import '../models/user_profile.dart';
 
 class GeminiService {
+  static void _report(Object e, StackTrace s) =>
+      Sentry.captureException(e, stackTrace: s);
   static GenerativeModel? _model;
   static GenerativeModel? _visionModel;
 
@@ -52,7 +56,7 @@ class GeminiService {
         'carbs': (data['carbs'] as num?)?.toInt() ?? 0,
         'fat': (data['fat'] as num?)?.toInt() ?? 0,
       };
-    } catch (_) {
+    } catch (e, s) { _report(e, s);
       return null;
     }
   }
@@ -71,7 +75,7 @@ Réponds UNIQUEMENT avec un tableau JSON de noms de recettes en anglais (pour la
       final jsonStr = RegExp(r'\[.*\]', dotAll: true).firstMatch(text)?.group(0);
       if (jsonStr == null) return [];
       return List<String>.from(jsonDecode(jsonStr));
-    } catch (_) {
+    } catch (e, s) { _report(e, s);
       return [];
     }
   }
@@ -116,9 +120,8 @@ Utilise des noms de recettes simples en anglais pour faciliter la recherche (ex:
       }
       onProgress?.call(90);
       return jsonDecode(jsonStr) as Map<String, dynamic>;
-    } catch (e) {
-      // ignore: avoid_print
-      print('[Gemini] generateWeekPlan error: $e');
+    } catch (e, s) {
+      _report(e, s);
       return null;
     }
   }
@@ -132,7 +135,7 @@ Utilise des noms de recettes simples en anglais pour faciliter la recherche (ex:
           'Réponds UNIQUEMENT avec le nom de la recette, rien d\'autre.';
       final response = await _chat.generateContent([Content.text(prompt)]);
       return response.text?.trim();
-    } catch (_) {
+    } catch (e, s) { _report(e, s);
       return null;
     }
   }
@@ -155,7 +158,7 @@ Utilise des noms de recettes simples en anglais pour faciliter la recherche (ex:
       final jsonStr = RegExp(r'\[.*\]', dotAll: true).firstMatch(text)?.group(0);
       if (jsonStr == null) return [];
       return List<String>.from(jsonDecode(jsonStr));
-    } catch (_) {
+    } catch (e, s) { _report(e, s);
       return [];
     }
   }
@@ -174,7 +177,7 @@ Utilise des noms de recettes simples en anglais pour faciliter la recherche (ex:
       final jsonStr = RegExp(r'\[.*\]', dotAll: true).firstMatch(text)?.group(0);
       if (jsonStr == null) return [];
       return List<String>.from(jsonDecode(jsonStr));
-    } catch (_) {
+    } catch (e, s) { _report(e, s);
       return [];
     }
   }
@@ -215,7 +218,7 @@ Utilise des noms simples en anglais (ex: "Chicken Pasta", "Omelette").
       if (jsonStr == null) return null;
       onProgress?.call(90);
       return jsonDecode(jsonStr) as Map<String, dynamic>;
-    } catch (_) {
+    } catch (e, s) { _report(e, s);
       return null;
     }
   }
@@ -259,7 +262,7 @@ Règles :
       if (jsonStr == null) return null;
       final list = jsonDecode(jsonStr) as List;
       return list.map((e) => CookingStep.fromJson(Map<String, dynamic>.from(e))).toList();
-    } catch (_) {
+    } catch (e, s) { _report(e, s);
       return null;
     }
   }
@@ -287,7 +290,7 @@ Réponds de manière concise et pratique en français (2-3 phrases max). Sois di
 ''';
       final response = await _chat.generateContent([Content.text(prompt)]);
       return response.text?.trim();
-    } catch (_) {
+    } catch (e, s) { _report(e, s);
       return null;
     }
   }
@@ -328,7 +331,53 @@ Règles : les tâches passives (mijoter, bouillir, cuire au four, reposer) d'une
       if (jsonStr == null) return null;
       final list = jsonDecode(jsonStr) as List;
       return list.map((e) => BatchStep.fromJson(Map<String, dynamic>.from(e))).toList();
-    } catch (_) {
+    } catch (e, s) { _report(e, s);
+      return null;
+    }
+  }
+
+  // ─── Translation ─────────────────────────────────────────────────────────────
+
+  static Future<TranslatedContent?> translateRecipe({
+    required String recipeId,
+    required String title,
+    required List<String> steps,
+    required List<String> ingredients,
+    required String targetLang,
+  }) async {
+    if (targetLang == 'en') return null;
+    try {
+      final langName = targetLang == 'fr' ? 'français' : 'anglais';
+      final stepsJson = jsonEncode(steps);
+      final ingsJson = jsonEncode(ingredients);
+
+      final prompt = '''
+Traduis cette recette en $langName. Conserve exactement le même nombre d'étapes et d'ingrédients.
+
+Titre : $title
+Étapes (JSON) : $stepsJson
+Ingrédients (JSON) : $ingsJson
+
+Réponds UNIQUEMENT avec ce JSON (sans texte autour) :
+{
+  "title": "titre traduit",
+  "steps": ["étape 1 traduite", "étape 2 traduite"],
+  "ingredients": ["ingrédient 1 traduit", "ingrédient 2 traduit"]
+}
+Conserve les mesures (g, ml, tsp, cup…) sans les traduire.
+''';
+      final response = await _chat.generateContent([Content.text(prompt)]);
+      final text = response.text ?? '';
+      final jsonStr = RegExp(r'\{.*\}', dotAll: true).firstMatch(text)?.group(0);
+      if (jsonStr == null) return null;
+      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+      return TranslatedContent(
+        recipeId: recipeId,
+        title: data['title']?.toString() ?? title,
+        steps: data['steps'] is List ? List<String>.from(data['steps']) : steps,
+        ingredients: data['ingredients'] is List ? List<String>.from(data['ingredients']) : ingredients,
+      );
+    } catch (e, s) { _report(e, s);
       return null;
     }
   }
@@ -351,7 +400,7 @@ Réponds en tableau JSON : [{"title": "nom du plat", "description": "comment fai
       if (jsonStr == null) return [];
       final list = jsonDecode(jsonStr) as List;
       return list.map((e) => '${e['title']} — ${e['description']}').toList();
-    } catch (_) {
+    } catch (e, s) { _report(e, s);
       return [];
     }
   }

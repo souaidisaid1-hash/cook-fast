@@ -282,16 +282,32 @@ class _CookModeScreenState extends ConsumerState<CookModeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Cooking screen stays dark for kitchen readability
     return Scaffold(
       backgroundColor: AppColors.darkBg,
       appBar: AppBar(
         backgroundColor: AppColors.darkBg,
         iconTheme: const IconThemeData(color: AppColors.textDark),
-        title: Text(
-          widget.recipe.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: AppColors.textDark, fontSize: 16),
+        elevation: 0,
+        title: Row(
+          children: [
+            Container(
+              width: 4, height: 18,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [AppColors.primary, AppColors.yellow], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                widget.recipe.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: AppColors.textDark, fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
         ),
       ),
       floatingActionButton: _s.loading

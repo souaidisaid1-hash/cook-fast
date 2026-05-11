@@ -80,12 +80,30 @@ class _BatchSelectScreenState extends ConsumerState<BatchSelectScreen> {
     final max = isPremium ? _maxPremium : _maxFree;
     final favorites = ref.watch(favoritesProvider);
 
+    final isDark = ref.watch(themeProvider);
+    final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
+    final textColor = isDark ? AppColors.textDark : AppColors.textLight;
+    final canStart = _selected.length >= _min;
+
     return Scaffold(
-      backgroundColor: AppColors.darkBg,
+      backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: AppColors.darkBg,
-        iconTheme: const IconThemeData(color: AppColors.textDark),
-        title: const Text('Batch Cooking 🍳', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w700)),
+        backgroundColor: bg,
+        iconTheme: IconThemeData(color: textColor),
+        elevation: 0,
+        title: Row(
+          children: [
+            Container(
+              width: 4, height: 20,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [AppColors.primary, AppColors.yellow], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text('Batch Cooking 🍳', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 17)),
+          ],
+        ),
         actions: [
           if (!isPremium)
             GestureDetector(
@@ -105,62 +123,70 @@ class _BatchSelectScreenState extends ConsumerState<BatchSelectScreen> {
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: ElevatedButton(
-            onPressed: _selected.length >= _min ? _start : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              disabledBackgroundColor: AppColors.darkBorder,
-              foregroundColor: Colors.white,
+          child: GestureDetector(
+            onTap: canStart ? _start : null,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
-            child: Text(
-              _selected.length < _min
-                  ? 'Sélectionne au moins $_min recettes'
-                  : 'Démarrer la session (${_selected.length} recettes) 🚀',
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              decoration: BoxDecoration(
+                gradient: canStart ? const LinearGradient(colors: [AppColors.primary, AppColors.yellow]) : null,
+                color: canStart ? null : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: canStart ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.35), blurRadius: 16, offset: const Offset(0, 6))] : [],
+              ),
+              child: Center(
+                child: Text(
+                  _selected.length < _min
+                      ? 'Sélectionne au moins $_min recettes'
+                      : 'Démarrer la session (${_selected.length} recettes) 🚀',
+                  style: TextStyle(
+                    color: canStart ? Colors.white : (isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             ),
           ),
         ),
       ),
       body: Column(
         children: [
-          // Selected chips
-          if (_selected.isNotEmpty) _buildSelectedBar(),
-
-          // Search bar
+          if (_selected.isNotEmpty) _buildSelectedBar(isDark),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: TextField(
               controller: _searchCtrl,
-              style: const TextStyle(color: AppColors.textDark),
+              style: TextStyle(color: textColor),
               onChanged: _search,
               decoration: InputDecoration(
                 hintText: 'Rechercher une recette...',
-                prefixIcon: const Icon(Icons.search, color: AppColors.textDarkSecondary),
+                prefixIcon: Icon(Icons.search, color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary),
                 suffixIcon: _searching
                     ? const Padding(
                         padding: EdgeInsets.all(12),
                         child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
                       )
                     : null,
+                filled: true,
+                fillColor: isDark ? AppColors.darkCard : Colors.white,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
               ),
             ),
           ),
-
           Expanded(
             child: _searchCtrl.text.isNotEmpty
-                ? _buildGrid(_results, 'Résultats de recherche', max: max)
-                : _buildGrid(favorites, 'Mes favoris', max: max, emptyMsg: 'Ajoute des favoris depuis les recettes\nou recherche ci-dessus.'),
+                ? _buildGrid(_results, 'Résultats de recherche', max: max, isDark: isDark, textColor: textColor)
+                : _buildGrid(favorites, 'Mes favoris', max: max, isDark: isDark, textColor: textColor, emptyMsg: 'Ajoute des favoris depuis les recettes\nou recherche ci-dessus.'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSelectedBar() => Container(
+  Widget _buildSelectedBar(bool isDark) => Container(
         height: 56,
-        color: AppColors.darkSurface,
+        color: isDark ? AppColors.darkSurface : const Color(0xFFEDEAE4),
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -196,7 +222,7 @@ class _BatchSelectScreenState extends ConsumerState<BatchSelectScreen> {
         ),
       );
 
-  Widget _buildGrid(List<Recipe> recipes, String title, {String? emptyMsg, required int max}) {
+  Widget _buildGrid(List<Recipe> recipes, String title, {String? emptyMsg, required int max, required bool isDark, required Color textColor}) {
     if (recipes.isEmpty) {
       return Center(
         child: Padding(
@@ -204,7 +230,7 @@ class _BatchSelectScreenState extends ConsumerState<BatchSelectScreen> {
           child: Text(
             emptyMsg ?? 'Aucun résultat',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.textDarkSecondary, fontSize: 14),
+            style: TextStyle(color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary, fontSize: 14),
           ),
         ),
       );
@@ -214,7 +240,7 @@ class _BatchSelectScreenState extends ConsumerState<BatchSelectScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Text(title, style: const TextStyle(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.w600)),
+          child: Text(title, style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w600)),
         ),
         Expanded(
           child: GridView.builder(
@@ -229,6 +255,7 @@ class _BatchSelectScreenState extends ConsumerState<BatchSelectScreen> {
             itemBuilder: (_, i) => _RecipeSelectCard(
               recipe: recipes[i],
               selected: _isSelected(recipes[i].id),
+              isDark: isDark,
               color: _isSelected(recipes[i].id)
                   ? _recipeColor(_selected.indexWhere((r) => r.id == recipes[i].id))
                   : null,
@@ -256,6 +283,7 @@ Color _recipeColor(int index) {
 class _RecipeSelectCard extends StatelessWidget {
   final Recipe recipe;
   final bool selected;
+  final bool isDark;
   final Color? color;
   final bool canAdd;
   final VoidCallback onTap;
@@ -263,6 +291,7 @@ class _RecipeSelectCard extends StatelessWidget {
   const _RecipeSelectCard({
     required this.recipe,
     required this.selected,
+    required this.isDark,
     this.color,
     required this.canAdd,
     required this.onTap,
@@ -276,12 +305,13 @@ class _RecipeSelectCard extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          color: AppColors.darkSurface,
+          color: isDark ? AppColors.darkSurface : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? cardColor : AppColors.darkBorder,
+            color: selected ? cardColor : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
             width: selected ? 2 : 1,
           ),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.06), blurRadius: 10, offset: const Offset(0, 3))],
         ),
         child: Stack(
           children: [
@@ -299,7 +329,7 @@ class _RecipeSelectCard extends StatelessWidget {
                         )
                       : Container(
                           height: 100,
-                          color: AppColors.darkCard,
+                          color: isDark ? AppColors.darkCard : const Color(0xFFF5F2EE),
                           child: const Center(child: Text('🍽️', style: TextStyle(fontSize: 32))),
                         ),
                 ),
@@ -307,14 +337,13 @@ class _RecipeSelectCard extends StatelessWidget {
                   padding: const EdgeInsets.all(10),
                   child: Text(
                     recipe.title,
-                    style: const TextStyle(color: AppColors.textDark, fontSize: 12, fontWeight: FontWeight.w600),
+                    style: TextStyle(color: isDark ? AppColors.textDark : AppColors.textLight, fontSize: 12, fontWeight: FontWeight.w600),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
-            // Badge sélection
             Positioned(
               top: 8,
               right: 8,
@@ -326,11 +355,7 @@ class _RecipeSelectCard extends StatelessWidget {
                   color: selected ? cardColor : Colors.black45,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  selected ? Icons.check : Icons.add,
-                  color: Colors.white,
-                  size: 16,
-                ),
+                child: Icon(selected ? Icons.check : Icons.add, color: Colors.white, size: 16),
               ),
             ),
           ],

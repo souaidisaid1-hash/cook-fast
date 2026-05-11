@@ -113,21 +113,36 @@ class _LeftoverBrainScreenState extends ConsumerState<LeftoverBrainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = ref.watch(themeProvider);
+    final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
+    final textColor = isDark ? AppColors.textDark : AppColors.textLight;
+    final subColor = isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
+
     return Scaffold(
-      backgroundColor: AppColors.darkBg,
+      backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: AppColors.darkBg,
-        iconTheme: const IconThemeData(color: AppColors.textDark),
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        backgroundColor: bg,
+        iconTheme: IconThemeData(color: textColor),
+        elevation: 0,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Leftover Brain 🧠',
-              style: TextStyle(color: AppColors.textDark, fontSize: 17, fontWeight: FontWeight.w700),
+            Row(
+              children: [
+                Container(
+                  width: 4, height: 18,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [AppColors.green, Color(0xFF27AE60)]),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text('Leftover Brain 🧠', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w800)),
+              ],
             ),
-            Text(
-              'Zéro gaspillage avec l\'IA',
-              style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 12),
+            Padding(
+              padding: const EdgeInsets.only(left: 12),
+              child: Text("Zéro gaspillage avec l'IA", style: TextStyle(color: subColor, fontSize: 11)),
             ),
           ],
         ),
@@ -138,16 +153,16 @@ class _LeftoverBrainScreenState extends ConsumerState<LeftoverBrainScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildRecipeBanner(),
+              _buildRecipeBanner(isDark, textColor),
               const SizedBox(height: 24),
-              _buildWasteScore(),
+              _buildWasteScore(isDark),
               const SizedBox(height: 24),
-              _buildIngredientSelector(),
+              _buildIngredientSelector(isDark, textColor, subColor),
               const SizedBox(height: 24),
               _buildCTA(),
               if (_analyzed && _reinventions.isNotEmpty) ...[
                 const SizedBox(height: 28),
-                _buildResults(),
+                _buildResults(isDark, textColor),
               ],
             ],
           ),
@@ -156,12 +171,13 @@ class _LeftoverBrainScreenState extends ConsumerState<LeftoverBrainScreen> {
     );
   }
 
-  Widget _buildRecipeBanner() => Container(
+  Widget _buildRecipeBanner(bool isDark, Color textColor) => Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.darkCard,
+          color: isDark ? AppColors.darkCard : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.darkBorder),
+          border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.06), blurRadius: 12, offset: const Offset(0, 4))],
         ),
         child: Row(
           children: [
@@ -179,11 +195,11 @@ class _LeftoverBrainScreenState extends ConsumerState<LeftoverBrainScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Recette cuisinée', style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 12)),
+                  Text('Recette cuisinée', style: TextStyle(color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary, fontSize: 12)),
                   const SizedBox(height: 2),
                   Text(
                     widget.recipe.title,
-                    style: const TextStyle(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.w600),
+                    style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w600),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -194,12 +210,13 @@ class _LeftoverBrainScreenState extends ConsumerState<LeftoverBrainScreen> {
         ),
       );
 
-  Widget _buildWasteScore() => Container(
+  Widget _buildWasteScore(bool isDark) => Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: _scoreColor.withValues(alpha: 0.1),
+          color: _scoreColor.withValues(alpha: isDark ? 0.1 : 0.08),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: _scoreColor.withValues(alpha: 0.3)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.04), blurRadius: 10, offset: const Offset(0, 3))],
         ),
         child: Row(
           children: [
@@ -212,7 +229,7 @@ class _LeftoverBrainScreenState extends ConsumerState<LeftoverBrainScreen> {
                   CircularProgressIndicator(
                     value: _wasteScore / 100,
                     strokeWidth: 6,
-                    backgroundColor: AppColors.darkBorder,
+                    backgroundColor: isDark ? AppColors.darkBorder : AppColors.lightBorder,
                     color: _scoreColor,
                   ),
                   Text(
@@ -231,7 +248,7 @@ class _LeftoverBrainScreenState extends ConsumerState<LeftoverBrainScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Waste Score', style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 12)),
+                  Text('Waste Score', style: TextStyle(color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary, fontSize: 12)),
                   const SizedBox(height: 4),
                   Text(
                     _scoreLabel,
@@ -241,7 +258,7 @@ class _LeftoverBrainScreenState extends ConsumerState<LeftoverBrainScreen> {
                     const SizedBox(height: 4),
                     Text(
                       '$_leftoverCount ingrédient${_leftoverCount > 1 ? 's' : ''} restant${_leftoverCount > 1 ? 's' : ''}',
-                      style: const TextStyle(color: AppColors.textDarkSecondary, fontSize: 12),
+                      style: TextStyle(color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary, fontSize: 12),
                     ),
                   ],
                 ],
@@ -251,17 +268,17 @@ class _LeftoverBrainScreenState extends ConsumerState<LeftoverBrainScreen> {
         ),
       );
 
-  Widget _buildIngredientSelector() => Column(
+  Widget _buildIngredientSelector(bool isDark, Color textColor, Color subColor) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Quels ingrédients vous restent ?',
-            style: TextStyle(color: AppColors.textDark, fontSize: 16, fontWeight: FontWeight.w600),
+            style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
-          const Text(
+          Text(
             'Sélectionnez les ingrédients non utilisés.',
-            style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 13),
+            style: TextStyle(color: subColor, fontSize: 13),
           ),
           const SizedBox(height: 14),
           Wrap(
@@ -273,6 +290,7 @@ class _LeftoverBrainScreenState extends ConsumerState<LeftoverBrainScreen> {
                   label: widget.recipe.ingredients[i],
                   measure: widget.recipe.measures.elementAtOrNull(i),
                   selected: _selected[i],
+                  isDark: isDark,
                   onToggle: (v) => setState(() => _selected[i] = v),
                 ),
             ],
@@ -297,16 +315,16 @@ class _LeftoverBrainScreenState extends ConsumerState<LeftoverBrainScreen> {
         ),
       );
 
-  Widget _buildResults() => Column(
+  Widget _buildResults(bool isDark, Color textColor) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Idées de réinvention 💡',
-            style: TextStyle(color: AppColors.textDark, fontSize: 16, fontWeight: FontWeight.w600),
+            style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
           for (int i = 0; i < _reinventions.length; i++) ...[
-            _ReinventionCard(index: i + 1, reinvention: _reinventions[i]),
+            _ReinventionCard(index: i + 1, reinvention: _reinventions[i], isDark: isDark),
             if (i < _reinventions.length - 1) const SizedBox(height: 10),
           ],
         ],
@@ -319,12 +337,14 @@ class _IngredientChip extends StatelessWidget {
   final String label;
   final String? measure;
   final bool selected;
+  final bool isDark;
   final ValueChanged<bool> onToggle;
 
   const _IngredientChip({
     required this.label,
     this.measure,
     required this.selected,
+    required this.isDark,
     required this.onToggle,
   });
 
@@ -336,12 +356,13 @@ class _IngredientChip extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? Colors.orange.withValues(alpha: 0.15) : AppColors.darkCard,
+          color: selected ? Colors.orange.withValues(alpha: 0.15) : (isDark ? AppColors.darkCard : Colors.white),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? Colors.orange : AppColors.darkBorder,
+            color: selected ? Colors.orange : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
             width: selected ? 1.5 : 1,
           ),
+          boxShadow: selected ? [] : [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.04), blurRadius: 6, offset: const Offset(0, 2))],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -355,7 +376,7 @@ class _IngredientChip extends StatelessWidget {
               child: Text(
                 measure != null && measure!.isNotEmpty ? '$measure $label' : label,
                 style: TextStyle(
-                  color: selected ? Colors.orange : AppColors.textDarkSecondary,
+                  color: selected ? Colors.orange : (isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary),
                   fontSize: 13,
                   fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
                 ),
@@ -373,8 +394,9 @@ class _IngredientChip extends StatelessWidget {
 class _ReinventionCard extends StatelessWidget {
   final int index;
   final _Reinvention reinvention;
+  final bool isDark;
 
-  const _ReinventionCard({required this.index, required this.reinvention});
+  const _ReinventionCard({required this.index, required this.reinvention, required this.isDark});
 
   static const _emojis = ['🥘', '🍜', '🥗'];
 
@@ -383,9 +405,10 @@ class _ReinventionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.darkSurface,
+        color: isDark ? AppColors.darkSurface : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.darkBorder),
+        border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.06), blurRadius: 12, offset: const Offset(0, 4))],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -411,8 +434,8 @@ class _ReinventionCard extends StatelessWidget {
               children: [
                 Text(
                   reinvention.title,
-                  style: const TextStyle(
-                    color: AppColors.textDark,
+                  style: TextStyle(
+                    color: isDark ? AppColors.textDark : AppColors.textLight,
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
@@ -421,8 +444,8 @@ class _ReinventionCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     reinvention.description,
-                    style: const TextStyle(
-                      color: AppColors.textDarkSecondary,
+                    style: TextStyle(
+                      color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary,
                       fontSize: 13,
                       height: 1.4,
                     ),

@@ -36,53 +36,90 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = ref.watch(themeProvider);
     final entries = ref.watch(journalProvider);
+    final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
+    final textColor = isDark ? AppColors.textDark : AppColors.textLight;
 
     return Scaffold(
-      backgroundColor: AppColors.darkBg,
+      backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: AppColors.darkBg,
-        iconTheme: const IconThemeData(color: AppColors.textDark),
-        title: const Text('Mon Journal 📔', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w700)),
+        backgroundColor: bg,
+        iconTheme: IconThemeData(color: textColor),
+        elevation: 0,
+        title: Row(
+          children: [
+            Container(
+              width: 4, height: 20,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [AppColors.primary, AppColors.yellow]),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text('Mon Journal 📔', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 17)),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openAddSheet(),
         backgroundColor: AppColors.primary,
         child: const Icon(Icons.add, color: Colors.white),
       ),
-      body: entries.isEmpty ? _buildEmpty() : _buildList(entries),
+      body: entries.isEmpty ? _buildEmpty(isDark) : _buildList(entries, isDark),
     );
   }
 
-  Widget _buildEmpty() => Center(
+  Widget _buildEmpty(bool isDark) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('📔', style: TextStyle(fontSize: 56)),
-            const SizedBox(height: 16),
-            const Text('Aucune entrée', style: TextStyle(color: AppColors.textDark, fontSize: 18, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 6),
-            const Text(
+            Container(
+              width: 90, height: 90,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [AppColors.primary.withValues(alpha: 0.15), AppColors.yellow.withValues(alpha: 0.08)]),
+                shape: BoxShape.circle,
+              ),
+              child: const Center(child: Text('📔', style: TextStyle(fontSize: 40))),
+            ),
+            const SizedBox(height: 20),
+            Text('Aucune entrée', style: TextStyle(color: isDark ? AppColors.textDark : AppColors.textLight, fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            Text(
               'Documentez vos créations\naprès chaque session de cuisine.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textDarkSecondary, fontSize: 14),
+              style: TextStyle(color: isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary, fontSize: 14, height: 1.5),
             ),
             const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => _openAddSheet(),
-              icon: const Icon(Icons.add),
-              label: const Text('Première entrée'),
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+            GestureDetector(
+              onTap: () => _openAddSheet(),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [AppColors.primary, AppColors.yellow]),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4))],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add, color: Colors.white, size: 18),
+                    SizedBox(width: 8),
+                    Text('Première entrée', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
       );
 
-  Widget _buildList(List<JournalEntry> entries) => ListView.builder(
+  Widget _buildList(List<JournalEntry> entries, bool isDark) => ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
         itemCount: entries.length,
         itemBuilder: (_, i) => _JournalCard(
           entry: entries[i],
+          isDark: isDark,
           onDelete: () => ref.read(journalProvider.notifier).remove(entries[i].id),
           onShare: () => _share(entries[i]),
         ),
@@ -107,10 +144,11 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
 
 class _JournalCard extends StatelessWidget {
   final JournalEntry entry;
+  final bool isDark;
   final VoidCallback onDelete;
   final VoidCallback onShare;
 
-  const _JournalCard({required this.entry, required this.onDelete, required this.onShare});
+  const _JournalCard({required this.entry, required this.isDark, required this.onDelete, required this.onShare});
 
   @override
   Widget build(BuildContext context) {
@@ -130,9 +168,9 @@ class _JournalCard extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: AppColors.darkSurface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.darkBorder),
+          color: isDark ? AppColors.darkSurface : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.06), blurRadius: 12, offset: const Offset(0, 4))],
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,

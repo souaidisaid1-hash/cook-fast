@@ -1,6 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import '../models/fridge_item.dart';
 
 typedef WeekPlan = Map<String, Map<String, dynamic>>;
 
@@ -148,6 +149,53 @@ class NotificationService {
 
   static Future<void> cancelChallengeReminder() async {
     await _plugin.cancel(200);
+  }
+
+  // ── Alertes expiration frigo ─────────────────────────────────────────────────
+
+  static Future<void> scheduleExpiryAlerts(List<FridgeItem> items) async {
+    for (int i = 400; i < 500; i++) { await _plugin.cancel(i); }
+
+    int id = 400;
+    final now = tz.TZDateTime.now(tz.local);
+
+    for (final item in items) {
+      if (item.expiryDate == null) continue;
+      final days = item.daysUntilExpiry!;
+      if (days < -1 || days > 3) continue;
+
+      final alertTime = tz.TZDateTime(
+        tz.local,
+        item.expiryDate!.year,
+        item.expiryDate!.month,
+        item.expiryDate!.day,
+        9, 0,
+      );
+
+      final title = days < 0
+          ? '🚨 ${item.name} a expiré !'
+          : days == 0
+              ? '⚠️ ${item.name} expire aujourd\'hui !'
+              : '⚠️ ${item.name} expire dans $days jour${days > 1 ? 's' : ''} !';
+      const body = 'Pense à l\'utiliser avant qu\'il ne soit trop tard.';
+
+      if (alertTime.isBefore(now)) {
+        await _plugin.show(id, title, body, _details);
+      } else {
+        await _plugin.zonedSchedule(
+          id, title, body, alertTime, _details,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+        );
+      }
+      id++;
+      if (id >= 500) break;
+    }
+  }
+
+  static Future<void> cancelExpiryAlerts() async {
+    for (int i = 400; i < 500; i++) { await _plugin.cancel(i); }
   }
 
   // ── Minuteur de cuisson ──────────────────────────────────────────────────────

@@ -215,10 +215,10 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
   Widget build(BuildContext context) {
     final isDark = ref.watch(themeProvider);
     final plan = ref.watch(weekPlanProvider);
-    final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
+    final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
     final textColor = isDark ? AppColors.textDark : AppColors.textLight;
     final subColor = isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
-    final cardColor = isDark ? AppColors.darkCard : AppColors.lightCard;
+    final cardColor = isDark ? AppColors.darkCard : Colors.white;
 
     final totalMeals = plan.values
         .expand((s) => s.values)
@@ -240,12 +240,30 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Plan de la semaine',
-                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textColor)),
-                        const SizedBox(height: 2),
-                        Text(
-                          totalMeals == 0 ? 'Aucun repas planifié' : '$totalMeals repas planifiés',
-                          style: TextStyle(fontSize: 13, color: subColor),
+                        Row(
+                          children: [
+                            Container(
+                              width: 4, height: 22,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [AppColors.primary, AppColors.yellow],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text('Plan de la semaine',
+                                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: textColor)),
+                          ],
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 14),
+                          child: Text(
+                            totalMeals == 0 ? 'Aucun repas planifié' : '$totalMeals repas planifiés',
+                            style: TextStyle(fontSize: 12, color: subColor),
+                          ),
                         ),
                       ],
                     ),
@@ -283,8 +301,12 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                       decoration: BoxDecoration(
-                        color: AppColors.primary,
+                        gradient: _state.isGenerating ? null : const LinearGradient(colors: [AppColors.primary, AppColors.yellow]),
+                        color: _state.isGenerating ? AppColors.primary : null,
                         borderRadius: BorderRadius.circular(12),
+                        boxShadow: _state.isGenerating ? null : [
+                          BoxShadow(color: AppColors.primary.withValues(alpha: 0.35), blurRadius: 10, offset: const Offset(0, 3)),
+                        ],
                       ),
                       child: Row(
                         children: [
@@ -554,12 +576,12 @@ class _SlotCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
