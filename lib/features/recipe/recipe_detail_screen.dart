@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/recipe.dart';
@@ -464,61 +465,9 @@ class RecipeDetailScreen extends ConsumerWidget {
                         ),
                       ),
 
-                    // ── YouTube ─────────────────────────────────────────────────
+                    // ── Vidéo ───────────────────────────────────────────────────
                     if (r.youtubeUrl != null && r.youtubeUrl!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                        child: GestureDetector(
-                          onTap: () => _launchUrl(r.youtubeUrl!),
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.red.withValues(alpha: 0.18),
-                                  Colors.red.withValues(alpha: 0.06),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.red.withValues(alpha: 0.35)),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.red.withValues(alpha: 0.12),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.withValues(alpha: 0.15),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.play_circle_filled_rounded, color: Colors.red, size: 28),
-                                ),
-                                const SizedBox(width: 14),
-                                const Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('Vidéo de la recette',
-                                          style: TextStyle(fontWeight: FontWeight.w700, color: Colors.red, fontSize: 15)),
-                                      SizedBox(height: 2),
-                                      Text('Voir la préparation sur YouTube',
-                                          style: TextStyle(color: Colors.red, fontSize: 12)),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(Icons.open_in_new_rounded, color: Colors.red, size: 18),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
+                      _YoutubeSection(url: r.youtubeUrl!),
 
                     const SizedBox(height: 140),
                   ],
@@ -1002,11 +951,304 @@ class RecipeDetailScreen extends ConsumerWidget {
     return result;
   }
 
-  Future<void> _launchUrl(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri != null && await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+}
+
+// ─── YouTube Section ──────────────────────────────────────────────────────────
+
+class _YoutubeSection extends StatefulWidget {
+  final String url;
+  const _YoutubeSection({required this.url});
+
+  @override
+  State<_YoutubeSection> createState() => _YoutubeSectionState();
+}
+
+class _YoutubeSectionState extends State<_YoutubeSection> {
+  YoutubePlayerController? _controller;
+  bool _showPlayer = false;
+  bool _intercepting = false;
+
+  String? get _videoId => YoutubePlayer.convertUrlToId(widget.url);
+
+  void _launch() {
+    final id = _videoId;
+    if (id == null) return;
+    _controller = YoutubePlayerController(
+      initialVideoId: id,
+      flags: const YoutubePlayerFlags(autoPlay: true, mute: false),
+    );
+    _controller!.addListener(_onControllerUpdate);
+    setState(() => _showPlayer = true);
+  }
+
+  // Intercepte le clic sur le bouton fullscreen natif du player
+  void _onControllerUpdate() {
+    if (!mounted || _intercepting) return;
+    if (_controller?.value.isFullScreen == true) {
+      _intercepting = true;
+      // Reset le flag interne avant le next frame pour éviter la boucle
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _controller?.toggleFullScreenMode();
+        _intercepting = false;
+        _pushFullScreen();
+      });
     }
+  }
+
+  void _pushFullScreen() {
+    final id = _videoId;
+    final position = _controller?.value.position ?? Duration.zero;
+    if (id == null) return;
+
+    // Pause le player embarqué pendant le plein écran
+    _controller?.pause();
+
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+
+    // rootNavigator: true → pousse AU-DESSUS de GoRouter, pas dans le shell
+    Navigator.of(context, rootNavigator: true)
+        .push(MaterialPageRoute<void>(
+          fullscreenDialog: true,
+          builder: (_) => _FullScreenVideoPage(
+            videoId: id,
+            startAt: position.inSeconds,
+          ),
+        ))
+        .then((_) {
+          SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+          SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+        });
+  }
+
+  void _close() {
+    _controller?.removeListener(_onControllerUpdate);
+    _controller?.dispose();
+    _controller = null;
+    setState(() => _showPlayer = false);
+  }
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_onControllerUpdate);
+    _controller?.dispose();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final id = _videoId;
+    if (id == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 4, height: 20,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                        colors: [Colors.red, Color(0xFFFF6B9D)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Text('🎬', style: TextStyle(fontSize: 18)),
+                const SizedBox(width: 6),
+                const Text('Vidéo de la recette',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700, color: Colors.red)),
+                const Spacer(),
+                if (_showPlayer)
+                  GestureDetector(
+                    onTap: _close,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                      ),
+                      child: const Text('Fermer',
+                          style: TextStyle(
+                              color: Colors.red, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // Player or thumbnail
+          if (_showPlayer && _controller != null)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: YoutubePlayer(
+                controller: _controller!,
+                showVideoProgressIndicator: true,
+                progressIndicatorColor: Colors.red,
+                progressColors: const ProgressBarColors(
+                  playedColor: Colors.red,
+                  handleColor: Colors.redAccent,
+                ),
+              ),
+            )
+          else
+            GestureDetector(
+              onTap: _launch,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      CachedNetworkImage(
+                        imageUrl: 'https://img.youtube.com/vi/$id/hqdefault.jpg',
+                        fit: BoxFit.cover,
+                        placeholder: (_, _) => Container(color: AppColors.darkCard),
+                        errorWidget: (_, _, _) => Container(
+                          color: AppColors.darkCard,
+                          child: const Center(
+                            child: Icon(Icons.movie_outlined,
+                                size: 48, color: Colors.white38),
+                          ),
+                        ),
+                      ),
+                      Container(color: Colors.black.withValues(alpha: 0.28)),
+                      Center(
+                        child: Container(
+                          width: 66, height: 66,
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.92),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                  color: Colors.red.withValues(alpha: 0.55),
+                                  blurRadius: 22, spreadRadius: 2),
+                            ],
+                          ),
+                          child: const Icon(Icons.play_arrow_rounded,
+                              color: Colors.white, size: 42),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 10, left: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.65),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.play_circle_outline_rounded,
+                                  color: Colors.red, size: 14),
+                              SizedBox(width: 5),
+                              Text('Appuyer pour lancer la vidéo',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Full Screen Video Page ────────────────────────────────────────────────────
+
+class _FullScreenVideoPage extends StatefulWidget {
+  final String videoId;
+  final int startAt;
+  const _FullScreenVideoPage({required this.videoId, required this.startAt});
+
+  @override
+  State<_FullScreenVideoPage> createState() => _FullScreenVideoPageState();
+}
+
+class _FullScreenVideoPageState extends State<_FullScreenVideoPage> {
+  late final YoutubePlayerController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = YoutubePlayerController(
+      initialVideoId: widget.videoId,
+      flags: YoutubePlayerFlags(autoPlay: true, startAt: widget.startAt),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          Center(
+            child: YoutubePlayer(
+              controller: _controller,
+              showVideoProgressIndicator: true,
+              progressIndicatorColor: Colors.red,
+              progressColors: const ProgressBarColors(
+                playedColor: Colors.red,
+                handleColor: Colors.redAccent,
+              ),
+            ),
+          ),
+          // Bouton quitter plein écran — toujours visible, au-dessus de la navbar
+          Positioned(
+            top: 0, right: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.65),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.fullscreen_exit_rounded,
+                        color: Colors.white, size: 26),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

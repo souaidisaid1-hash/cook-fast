@@ -50,6 +50,7 @@ const _kCats = [
   _Cat('Soupe',         '🍲', [Color(0xFF11998e), Color(0xFF74ebd5)], search: 'soup'),
   _Cat('Entrée',        '🥟', [Color(0xFFfd746c), Color(0xFFff9068)], mealDb: 'Starter'),
   _Cat('Vegan',         '🌿', [Color(0xFF56ab2f), Color(0xFFa8e063)], mealDb: 'Vegan'),
+  _Cat('Pâtisserie',   '🥐', [Color(0xFFFFD93D), Color(0xFFFF6B9D)], search: 'cake'),
 ];
 
 const _kCountries = [
@@ -127,6 +128,7 @@ class _HomeState {
   final List<Recipe> categoryRecipes;
   final List<Recipe> countryRecipes;
   final List<Recipe> healthyRecipes;
+  final List<Recipe> pastryRecipes;
   final bool isLoading;
   final bool isMoodLoading;
   final bool isCategoryLoading;
@@ -142,6 +144,7 @@ class _HomeState {
     this.categoryRecipes = const [],
     this.countryRecipes = const [],
     this.healthyRecipes = const [],
+    this.pastryRecipes = const [],
     this.isLoading = true,
     this.isMoodLoading = false,
     this.isCategoryLoading = false,
@@ -160,6 +163,7 @@ class _HomeState {
     List<Recipe>? categoryRecipes,
     List<Recipe>? countryRecipes,
     List<Recipe>? healthyRecipes,
+    List<Recipe>? pastryRecipes,
     bool? isLoading,
     bool? isMoodLoading,
     bool? isCategoryLoading,
@@ -175,6 +179,7 @@ class _HomeState {
         categoryRecipes:  categoryRecipes  ?? this.categoryRecipes,
         countryRecipes:   countryRecipes   ?? this.countryRecipes,
         healthyRecipes:   healthyRecipes   ?? this.healthyRecipes,
+        pastryRecipes:    pastryRecipes    ?? this.pastryRecipes,
         isLoading:        isLoading        ?? this.isLoading,
         isMoodLoading:    isMoodLoading    ?? this.isMoodLoading,
         isCategoryLoading:isCategoryLoading?? this.isCategoryLoading,
@@ -203,6 +208,7 @@ class HomeNotifier extends StateNotifier<_HomeState> {
         isLoading: false,
       );
       _loadHealthy();
+      _loadPastry();
     } catch (_) {
       state = state.copyWith(isLoading: false);
     }
@@ -217,6 +223,13 @@ class HomeNotifier extends StateNotifier<_HomeState> {
     try {
       final r = await MealDbService.byCategory('Vegetarian');
       state = state.copyWith(healthyRecipes: r.take(8).toList());
+    } catch (_) {}
+  }
+
+  Future<void> _loadPastry() async {
+    try {
+      final r = await MealDbService.byCategory('Dessert');
+      state = state.copyWith(pastryRecipes: r.take(8).toList());
     } catch (_) {}
   }
 
@@ -366,7 +379,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final week = DateTime.now().difference(DateTime(2024, 1, 1)).inDays ~/ 7;
     final banner = _challengeBanners[week % _challengeBanners.length];
 
-    // Recettes rapides filtrées depuis les quick
     final fast = s.quickRecipes.where((r) {
       final t = r.cookTimeMinutes ?? (r.steps.length * 5).clamp(15, 90);
       return t <= 35;
@@ -380,47 +392,138 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: CustomScrollView(
           slivers: [
 
-            // ── Top bar ────────────────────────────────────────────────────
+            // ── Header ────────────────────────────────────────────────────
             SliverToBoxAdapter(
               child: SafeArea(
                 bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 16, 0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(_greeting(),
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: AppColors.primary.withValues(alpha: 0.8),
-                                    fontWeight: FontWeight.w600)),
-                            const Text('CookFast',
-                                style: TextStyle(
-                                    fontSize: 30,
-                                    fontWeight: FontWeight.w900,
-                                    color: AppColors.primary,
-                                    letterSpacing: -0.5,
-                                    height: 1.1)),
-                          ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 16, 0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(_greeting(),
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        color: AppColors.primary.withValues(alpha: 0.85),
+                                        fontWeight: FontWeight.w600)),
+                                const Text('CookFast',
+                                    style: TextStyle(
+                                        fontSize: 34,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppColors.primary,
+                                        letterSpacing: -1.0,
+                                        height: 1.05)),
+                              ],
+                            ),
+                          ),
+                          _iconBtn(Icons.favorite_rounded,
+                              () => context.push('/favorites'), isDark,
+                              color: Colors.red),
+                          const SizedBox(width: 8),
+                          _iconBtn(
+                            isDark ? Icons.wb_sunny_rounded : Icons.nights_stay_rounded,
+                            () => ref.read(themeProvider.notifier).toggle(),
+                            isDark,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    // Full-width search bar
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: GestureDetector(
+                        onTap: () => context.push('/ingredient-search'),
+                        child: Container(
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: isDark ? AppColors.darkCard : Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.22),
+                              width: 1.5,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withValues(alpha: 0.07),
+                                blurRadius: 20,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              const SizedBox(width: 14),
+                              Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                      colors: [AppColors.primary, AppColors.yellow]),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.search_rounded,
+                                    color: Colors.white, size: 16),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text('Rechercher une recette...',
+                                    style: TextStyle(
+                                        fontSize: 14.5,
+                                        color: subColor,
+                                        fontWeight: FontWeight.w400)),
+                              ),
+                              Container(
+                                margin: const EdgeInsets.only(right: 12),
+                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                      colors: [Color(0xFF6B73FF), Color(0xFF9B59B6)]),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text('IA ✨',
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700)),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      _iconBtn(Icons.search_rounded,
-                          () => context.push('/ingredient-search'), isDark),
-                      const SizedBox(width: 8),
-                      _iconBtn(Icons.favorite_rounded,
-                          () => context.push('/favorites'), isDark,
-                          color: Colors.red),
-                      const SizedBox(width: 8),
-                      _iconBtn(
-                        isDark ? Icons.wb_sunny_rounded : Icons.nights_stay_rounded,
-                        () => ref.read(themeProvider.notifier).toggle(),
-                        isDark,
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Quick actions ─────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                child: Row(
+                  children: [
+                    _quickAction('🍱', 'Batch',
+                        [const Color(0xFFFF9F43), const Color(0xFFEE5A24)],
+                        () => context.push('/batch-select')),
+                    const SizedBox(width: 10),
+                    _quickAction('📅', 'Planning',
+                        [const Color(0xFF2ECC71), const Color(0xFF27AE60)],
+                        () => context.push('/plan')),
+                    const SizedBox(width: 10),
+                    _quickAction('👥', 'Ensemble',
+                        [const Color(0xFF4A90D9), const Color(0xFF6B73FF)],
+                        () => context.push('/cook-together-join')),
+                    const SizedBox(width: 10),
+                    _quickAction('🏆', 'Défi',
+                        [const Color(0xFFFF6B9D), const Color(0xFFa55eea)],
+                        () => context.push('/challenge')),
+                  ],
                 ),
               ),
             ),
@@ -428,14 +531,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             // ── Hero carousel ──────────────────────────────────────────────
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
                 child: s.isLoading
                     ? _heroShimmer(isDark)
                     : s.featuredRecipes.isNotEmpty
                         ? Column(
                             children: [
                               SizedBox(
-                                height: 380,
+                                height: 390,
                                 child: PageView.builder(
                                   controller: _pageCtrl,
                                   itemCount: s.featuredRecipes.length,
@@ -445,7 +548,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       _heroCard(context, s.featuredRecipes[i]),
                                 ),
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 14),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: List.generate(
@@ -453,12 +556,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   (i) => AnimatedContainer(
                                     duration: const Duration(milliseconds: 300),
                                     margin: const EdgeInsets.symmetric(horizontal: 3),
-                                    width: _heroPage == i ? 24 : 6,
+                                    width: _heroPage == i ? 28 : 6,
                                     height: 6,
                                     decoration: BoxDecoration(
                                       gradient: _heroPage == i
-                                          ? const LinearGradient(colors: [
-                                              AppColors.primary, AppColors.yellow])
+                                          ? const LinearGradient(
+                                              colors: [AppColors.primary, AppColors.yellow])
                                           : null,
                                       color: _heroPage == i
                                           ? null
@@ -481,7 +584,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             SliverToBoxAdapter(child: _sectionTitle('Catégories', null, textColor)),
             SliverToBoxAdapter(
               child: SizedBox(
-                height: 42,
+                height: 44,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -527,7 +630,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   children: [
                     _sectionTitle('⚡ Prêt en 30 min', null, textColor),
                     SizedBox(
-                      height: 265,
+                      height: 280,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -545,17 +648,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 28, 20, 14),
+                    padding: const EdgeInsets.fromLTRB(20, 30, 20, 16),
                     child: Row(
                       children: [
                         _accentBar(),
                         const SizedBox(width: 10),
                         Text('Comment tu te sens ?',
                             style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.w800, color: textColor)),
+                                fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
                         const Spacer(),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                                 colors: [Color(0xFF6B73FF), Color(0xFF9B59B6)]),
@@ -563,13 +666,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                           child: const Text('IA ✨',
                               style: TextStyle(
-                                  color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700)),
                         ),
                       ],
                     ),
                   ),
                   SizedBox(
-                    height: 46,
+                    height: 68,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -583,9 +688,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               .selectMood(mood.$1, profile),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
-                            margin: const EdgeInsets.only(right: 8),
+                            margin: const EdgeInsets.only(right: 10),
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 10),
+                                horizontal: 18, vertical: 14),
                             decoration: BoxDecoration(
                               color: sel
                                   ? mood.$3
@@ -594,24 +699,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               border: Border.all(
                                 color: sel
                                     ? Colors.transparent
-                                    : mood.$3.withValues(alpha: 0.35),
+                                    : mood.$3.withValues(alpha: 0.4),
                                 width: 1.5,
                               ),
                               boxShadow: sel
                                   ? [BoxShadow(
-                                      color: mood.$3.withValues(alpha: 0.4),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 4))]
+                                      color: mood.$3.withValues(alpha: 0.45),
+                                      blurRadius: 14,
+                                      offset: const Offset(0, 5))]
                                   : [],
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(mood.$2, style: const TextStyle(fontSize: 16)),
-                                const SizedBox(width: 6),
+                                Text(mood.$2, style: const TextStyle(fontSize: 20)),
+                                const SizedBox(width: 8),
                                 Text(mood.$1,
                                     style: TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 13,
                                         fontWeight: FontWeight.w600,
                                         color: sel ? Colors.white : subColor)),
                               ],
@@ -645,7 +750,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 children: [
                   _sectionTitle('💡 Conseils du chef', null, textColor),
                   SizedBox(
-                    height: 120,
+                    height: 148,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -661,7 +766,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             SliverToBoxAdapter(child: _sectionTitle('🌍 Tour du monde', null, textColor)),
             SliverToBoxAdapter(
               child: SizedBox(
-                height: 42,
+                height: 44,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -700,60 +805,92 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             // ── Challenge banner ───────────────────────────────────────────
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 28, 16, 0),
+                padding: const EdgeInsets.fromLTRB(16, 30, 16, 0),
                 child: GestureDetector(
                   onTap: () => context.push('/challenge'),
                   child: Container(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                           colors: banner.$3,
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight),
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(28),
                       boxShadow: [
                         BoxShadow(
-                            color: (banner.$3.first).withValues(alpha: 0.4),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8)),
+                            color: (banner.$3.first).withValues(alpha: 0.5),
+                            blurRadius: 28,
+                            offset: const Offset(0, 10)),
                       ],
                     ),
                     child: Row(
                       children: [
-                        Container(
-                          width: 64, height: 64,
-                          decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.15),
-                              shape: BoxShape.circle),
-                          child: Center(child: Text(banner.$1, style: const TextStyle(fontSize: 32))),
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Container(
+                              width: 80, height: 80,
+                              decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                  shape: BoxShape.circle),
+                            ),
+                            Container(
+                              width: 58, height: 58,
+                              decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.12),
+                                  shape: BoxShape.circle),
+                            ),
+                            Text(banner.$1,
+                                style: const TextStyle(fontSize: 36)),
+                          ],
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 18),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(8)),
+                                    color: Colors.white.withValues(alpha: 0.22),
+                                    borderRadius: BorderRadius.circular(10)),
                                 child: const Text('🏆 DÉFI DE LA SEMAINE',
                                     style: TextStyle(
                                         color: Colors.white,
-                                        fontSize: 9,
+                                        fontSize: 10,
                                         fontWeight: FontWeight.w800,
                                         letterSpacing: 0.8)),
                               ),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 8),
                               Text(banner.$2,
                                   style: const TextStyle(
                                       color: Colors.white,
-                                      fontSize: 20,
+                                      fontSize: 22,
                                       fontWeight: FontWeight.w900,
                                       height: 1.1)),
-                              const SizedBox(height: 4),
-                              const Text('Rejoins la communauté →',
-                                  style: TextStyle(color: Colors.white70, fontSize: 12)),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  const Text('Rejoins la communauté',
+                                      style: TextStyle(
+                                          color: Colors.white70, fontSize: 12)),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.22),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: const Text('→',
+                                        style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800)),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -772,7 +909,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   _sectionTitle('🥗 Manger sain', null, textColor),
                   if (s.healthyRecipes.isEmpty)
                     SizedBox(
-                      height: 265,
+                      height: 280,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -782,7 +919,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     )
                   else
                     SizedBox(
-                      height: 265,
+                      height: 280,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -800,15 +937,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 28, 16, 14),
+                    padding: const EdgeInsets.fromLTRB(20, 30, 16, 16),
                     child: Row(
                       children: [
                         _accentBar(),
                         const SizedBox(width: 10),
                         Text('Populaire en ce moment',
                             style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.w800, color: textColor)),
-                        const Text(' 🔥', style: TextStyle(fontSize: 16)),
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: textColor)),
+                        const Text(' 🔥', style: TextStyle(fontSize: 18)),
                         const Spacer(),
                         GestureDetector(
                           onTap: () => context.push('/ingredient-search'),
@@ -823,7 +962,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   if (s.isLoading)
                     SizedBox(
-                      height: 265,
+                      height: 280,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -833,12 +972,64 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     )
                   else if (s.quickRecipes.isNotEmpty)
                     SizedBox(
-                      height: 265,
+                      height: 280,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         itemCount: s.quickRecipes.length,
                         itemBuilder: (_, i) => _RecipeCard(recipe: s.quickRecipes[i]),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // ── Pâtisserie ─────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 30, 16, 16),
+                    child: Row(
+                      children: [
+                        _accentBar(),
+                        const SizedBox(width: 10),
+                        Text('🥐 Pâtisserie',
+                            style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: textColor)),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () => context.push('/pastry'),
+                          child: const Text('Voir tout',
+                              style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (s.pastryRecipes.isEmpty)
+                    SizedBox(
+                      height: 280,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        itemCount: 4,
+                        itemBuilder: (_, _) => _cardShimmer(isDark),
+                      ),
+                    )
+                  else
+                    SizedBox(
+                      height: 280,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        itemCount: s.pastryRecipes.length,
+                        itemBuilder: (_, i) => _RecipeCard(recipe: s.pastryRecipes[i]),
                       ),
                     ),
                 ],
@@ -851,6 +1042,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     );
   }
+
+  // ── Quick action card ──────────────────────────────────────────────────────
+
+  Widget _quickAction(
+      String emoji, String label, List<Color> gradient, VoidCallback onTap) =>
+      Expanded(
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            height: 74,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                  colors: gradient,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                    color: gradient[0].withValues(alpha: 0.38),
+                    blurRadius: 14,
+                    offset: const Offset(0, 5)),
+              ],
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(emoji, style: const TextStyle(fontSize: 24)),
+                const SizedBox(height: 5),
+                Text(label,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ),
+        ),
+      );
 
   // ── Hero card ──────────────────────────────────────────────────────────────
 
@@ -1023,7 +1252,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Expanded(child: Text(title,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w800, color: textColor))),
+                      fontSize: 20, fontWeight: FontWeight.w800, color: textColor))),
               if (loading)
                 const SizedBox(width: 16, height: 16,
                     child: CircularProgressIndicator(
@@ -1033,7 +1262,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         if (loading)
           SizedBox(
-            height: 265,
+            height: 280,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1043,7 +1272,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         if (!loading && recipes.isNotEmpty)
           SizedBox(
-            height: 265,
+            height: 280,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1262,14 +1491,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
 
   Widget _sectionTitle(String title, String? emoji, Color textColor) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 28, 20, 14),
+        padding: const EdgeInsets.fromLTRB(20, 30, 20, 14),
         child: Row(
           children: [
             _accentBar(),
             const SizedBox(width: 10),
             Text('$title${emoji ?? ''}',
                 style: TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.w800, color: textColor)),
+                    fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
           ],
         ),
       );
@@ -1277,7 +1506,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _heroShimmer(bool isDark) => Shimmer.fromColors(
         baseColor: isDark ? AppColors.darkCard : AppColors.lightBorder,
         highlightColor: isDark ? AppColors.darkBorder : Colors.grey[100]!,
-        child: Container(height: 380,
+        child: Container(height: 390,
             decoration: BoxDecoration(
                 color: Colors.white, borderRadius: BorderRadius.circular(28))),
       );
@@ -1287,7 +1516,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: Shimmer.fromColors(
           baseColor: isDark ? AppColors.darkCard : AppColors.lightBorder,
           highlightColor: isDark ? AppColors.darkBorder : Colors.grey[100]!,
-          child: Container(width: 180, height: 265,
+          child: Container(width: 185, height: 280,
               decoration: BoxDecoration(
                   color: Colors.white, borderRadius: BorderRadius.circular(22))),
         ),
@@ -1343,18 +1572,18 @@ class _TipCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: 180,
+        width: 210,
         margin: const EdgeInsets.only(right: 12),
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
               colors: tip.gradient,
               begin: Alignment.topLeft, end: Alignment.bottomRight),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
                 color: tip.gradient[0].withValues(alpha: 0.3),
-                blurRadius: 12, offset: const Offset(0, 4))
+                blurRadius: 14, offset: const Offset(0, 5))
           ],
         ),
         child: Column(
@@ -1362,7 +1591,7 @@ class _TipCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(children: [
-              Text(tip.emoji, style: const TextStyle(fontSize: 22)),
+              Text(tip.emoji, style: const TextStyle(fontSize: 24)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(tip.title,
@@ -1374,11 +1603,11 @@ class _TipCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis),
               ),
             ]),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Text(tip.desc,
                 style: const TextStyle(
-                    color: Colors.white70, fontSize: 11, height: 1.4),
-                maxLines: 3,
+                    color: Colors.white70, fontSize: 11.5, height: 1.45),
+                maxLines: 4,
                 overflow: TextOverflow.ellipsis),
           ],
         ),
@@ -1400,7 +1629,7 @@ class _RecipeCard extends ConsumerWidget {
     return GestureDetector(
       onTap: () => context.push('/recipe/${recipe.id}', extra: recipe),
       child: Container(
-        width: 180,
+        width: 185,
         margin: const EdgeInsets.only(right: 14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),

@@ -26,6 +26,7 @@ import '../../features/stats/stats_screen.dart';
 import '../../features/fridge/fridge_plan_screen.dart';
 import '../../features/search/ingredient_search_screen.dart';
 import '../../features/favorites/favorites_screen.dart';
+import '../../features/pastry/pastry_screen.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/models/recipe.dart';
 import '../shell/main_shell.dart';
@@ -134,6 +135,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/favorites',
         builder: (_, __) => const FavoritesScreen(),
+      ),
+      GoRoute(
+        path: '/pastry',
+        builder: (_, __) => const PastryScreen(),
       ),
       GoRoute(
         path: '/batch-cook',
