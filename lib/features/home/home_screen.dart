@@ -190,18 +190,27 @@ class HomeNotifier extends StateNotifier<_HomeState> {
   }
 
   Future<void> _init() async {
-    final results = await Future.wait([
-      ...List.generate(5, (_) => MealDbService.random()),
-      MealDbService.random10(),
-    ]);
-    final featured = results.take(5).whereType<Recipe>().toList();
-    final quick = (results[5] as List<Recipe>).take(8).toList();
-    state = state.copyWith(
-      featuredRecipes: featured,
-      quickRecipes: quick,
-      isLoading: false,
-    );
-    _loadHealthy();
+    try {
+      final results = await Future.wait([
+        ...List.generate(5, (_) => MealDbService.random()),
+        MealDbService.random10(),
+      ]);
+      final featured = results.take(5).whereType<Recipe>().toList();
+      final quick = (results[5] as List<Recipe>).take(8).toList();
+      state = state.copyWith(
+        featuredRecipes: featured,
+        quickRecipes: quick,
+        isLoading: false,
+      );
+      _loadHealthy();
+    } catch (_) {
+      state = state.copyWith(isLoading: false);
+    }
+  }
+
+  Future<void> retry() async {
+    state = const _HomeState();
+    _init();
   }
 
   Future<void> _loadHealthy() async {
@@ -461,7 +470,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               ),
                             ],
                           )
-                        : const SizedBox.shrink(),
+                        : _connectionError(
+                            isDark: isDark,
+                            onRetry: () => ref.read(homeProvider.notifier).retry(),
+                          ),
               ),
             ),
 
@@ -500,6 +512,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   recipes: s.categoryRecipes,
                   loading: s.isCategoryLoading,
                   isDark: isDark, textColor: textColor,
+                  onRetry: () {
+                    final cat = _kCats.where((c) => c.label == s.selectedCategory).firstOrNull;
+                    ref.read(homeProvider.notifier).selectCategory(s.selectedCategory, cat);
+                  },
                 ),
               ),
 
@@ -617,6 +633,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   recipes: s.moodRecipes,
                   loading: s.isMoodLoading,
                   isDark: isDark, textColor: textColor,
+                  onRetry: () => ref.read(homeProvider.notifier)
+                      .selectMood(s.selectedMood!, ref.read(userProfileProvider)),
                 ),
               ),
 
@@ -672,6 +690,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   recipes: s.countryRecipes,
                   loading: s.isCountryLoading,
                   isDark: isDark, textColor: textColor,
+                  onRetry: () {
+                    final c = _kCountries.where((c) => c.label == s.selectedCountry).firstOrNull;
+                    ref.read(homeProvider.notifier).selectCountry(s.selectedCountry, c);
+                  },
                 ),
               ),
 
@@ -987,6 +1009,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     required bool loading,
     required bool isDark,
     required Color textColor,
+    VoidCallback? onRetry,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1008,16 +1031,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ],
           ),
         ),
-        if (!loading && recipes.isNotEmpty)
-          SizedBox(
-            height: 265,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: recipes.length,
-              itemBuilder: (_, i) => _RecipeCard(recipe: recipes[i]),
-            ),
-          ),
         if (loading)
           SizedBox(
             height: 265,
@@ -1028,7 +1041,100 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               itemBuilder: (_, _) => _cardShimmer(isDark),
             ),
           ),
+        if (!loading && recipes.isNotEmpty)
+          SizedBox(
+            height: 265,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: recipes.length,
+              itemBuilder: (_, i) => _RecipeCard(recipe: recipes[i]),
+            ),
+          ),
+        if (!loading && recipes.isEmpty)
+          _inlineError(isDark: isDark, onRetry: onRetry),
       ],
+    );
+  }
+
+  Widget _inlineError({required bool isDark, VoidCallback? onRetry}) {
+    final subColor = isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.red.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.wifi_off_rounded, size: 18, color: Colors.red),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Impossible de charger les recettes',
+                style: TextStyle(fontSize: 13, color: subColor),
+              ),
+            ),
+            if (onRetry != null)
+              GestureDetector(
+                onTap: onRetry,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Réessayer',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _connectionError({required bool isDark, required VoidCallback onRetry}) {
+    final subColor = isDark ? AppColors.textDarkSecondary : AppColors.textLightSecondary;
+    return Container(
+      height: 180,
+      margin: const EdgeInsets.symmetric(horizontal: 0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.wifi_off_rounded, size: 40, color: subColor),
+          const SizedBox(height: 12),
+          Text(
+            'Connexion impossible',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: isDark ? AppColors.textDark : AppColors.textLight),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Vérifie ta connexion internet',
+            style: TextStyle(fontSize: 13, color: subColor),
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: onRetry,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryDark]),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'Réessayer',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

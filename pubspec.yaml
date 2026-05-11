@@ -22,7 +22,6 @@ dependencies:
 
   # Local storage
   hive_flutter: ^1.1.0
-  path_provider: ^2.1.5
 
   # AI
   google_generative_ai: ^0.4.6
@@ -45,7 +44,6 @@ dependencies:
   flutter_local_notifications: ^18.0.1
 
   # UI & Animations
-  lottie: ^3.3.1
   cached_network_image: ^3.4.1
   shimmer: ^3.0.0
   fl_chart: ^0.70.2
@@ -53,7 +51,6 @@ dependencies:
   # Utils
   share_plus: ^10.1.2
   uuid: ^4.5.1
-  intl: ^0.20.2
   url_launcher: ^6.3.2
 
 dev_dependencies:

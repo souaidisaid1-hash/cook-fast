@@ -17,6 +17,7 @@ class _LeftoverBrainScreenState extends ConsumerState<LeftoverBrainScreen> {
   late List<bool> _selected; // true = ingrédient restant
   bool _loading = false;
   bool _analyzed = false;
+  bool _usedFallback = false;
   List<_Reinvention> _reinventions = [];
 
   @override
@@ -72,9 +73,10 @@ class _LeftoverBrainScreenState extends ConsumerState<LeftoverBrainScreen> {
 
     List<_Reinvention> parsed;
     if (results.isEmpty) {
-      // Fallback local quand Gemini est indisponible
       parsed = _fallback(ingredients);
+      if (mounted) setState(() => _usedFallback = true);
     } else {
+      if (mounted) setState(() => _usedFallback = false);
       parsed = results.map((s) {
         final idx = s.indexOf(' — ');
         if (idx == -1) return _Reinvention(title: s, description: '');
@@ -322,6 +324,32 @@ class _LeftoverBrainScreenState extends ConsumerState<LeftoverBrainScreen> {
             'Idées de réinvention 💡',
             style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w600),
           ),
+          if (_usedFallback) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.yellow.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.yellow.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.wifi_off_rounded, size: 15, color: AppColors.yellow),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'IA indisponible — suggestions locales',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? AppColors.textDark : AppColors.textLight,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           for (int i = 0; i < _reinventions.length; i++) ...[
             _ReinventionCard(index: i + 1, reinvention: _reinventions[i], isDark: isDark),
