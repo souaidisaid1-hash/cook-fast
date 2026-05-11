@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/theme/app_theme.dart';
+import '../../shared/models/journal_entry.dart';
 import '../../shared/providers/app_providers.dart';
 
 // ─── Challenge data ───────────────────────────────────────────────────────────
@@ -165,6 +167,13 @@ class _State extends ConsumerState<ChallengeScreen> {
             'note': note,
           });
           ref.read(skillTreeProvider.notifier).addXp('misc', _currentChallenge.xp);
+          ref.read(journalProvider.notifier).add(JournalEntry(
+            id: const Uuid().v4(),
+            recipeTitle: recipe.isNotEmpty ? recipe : _currentChallenge.title,
+            category: 'Défi',
+            cookedAt: DateTime.now(),
+            notes: note,
+          ));
           if (mounted) setState(() => _hasCompleted = true);
         },
       ),

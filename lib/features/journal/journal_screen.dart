@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_theme.dart';
@@ -26,11 +27,31 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
   }
 
   void _openAddSheet([Recipe? recipe]) {
+    final isPremium = ref.read(premiumProvider);
+    final count = ref.read(journalProvider).length;
+    if (!isPremium && count >= 5) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Limite gratuite atteinte (5 entrées). Passe Premium pour un journal illimité.'),
+        action: SnackBarAction(label: 'Premium 👑', onPressed: () => context.push('/premium')),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF1a0533),
+      ));
+      return;
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _AddEntrySheet(recipe: recipe),
+    );
+  }
+
+  void _openEditSheet(JournalEntry entry) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AddEntrySheet(existingEntry: entry),
     );
   }
 
@@ -120,6 +141,7 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
         itemBuilder: (_, i) => _JournalCard(
           entry: entries[i],
           isDark: isDark,
+          onEdit: () => _openEditSheet(entries[i]),
           onDelete: () => ref.read(journalProvider.notifier).remove(entries[i].id),
           onShare: () => _share(entries[i]),
         ),
@@ -145,10 +167,11 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
 class _JournalCard extends StatelessWidget {
   final JournalEntry entry;
   final bool isDark;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onShare;
 
-  const _JournalCard({required this.entry, required this.isDark, required this.onDelete, required this.onShare});
+  const _JournalCard({required this.entry, required this.isDark, required this.onEdit, required this.onDelete, required this.onShare});
 
   @override
   Widget build(BuildContext context) {
@@ -165,7 +188,9 @@ class _JournalCard extends StatelessWidget {
         child: const Icon(Icons.delete_outline, color: Colors.white),
       ),
       onDismissed: (_) => onDelete(),
-      child: Container(
+      child: GestureDetector(
+        onTap: onEdit,
+        child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
           color: isDark ? AppColors.darkSurface : Colors.white,
@@ -242,6 +267,7 @@ class _JournalCard extends StatelessWidget {
           ],
         ),
       ),
+      ),
     );
   }
 }
@@ -250,7 +276,8 @@ class _JournalCard extends StatelessWidget {
 
 class _AddEntrySheet extends ConsumerStatefulWidget {
   final Recipe? recipe;
-  const _AddEntrySheet({this.recipe});
+  final JournalEntry? existingEntry;
+  const _AddEntrySheet({this.recipe, this.existingEntry});
 
   @override
   ConsumerState<_AddEntrySheet> createState() => _AddEntrySheetState();
@@ -258,15 +285,21 @@ class _AddEntrySheet extends ConsumerStatefulWidget {
 
 class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
   late final TextEditingController _titleCtrl;
-  final TextEditingController _notesCtrl = TextEditingController();
-  int _rating = 0;
+  late final TextEditingController _notesCtrl;
+  late int _rating;
   String? _photoPath;
   bool _saving = false;
+
+  bool get _isEdit => widget.existingEntry != null;
 
   @override
   void initState() {
     super.initState();
-    _titleCtrl = TextEditingController(text: widget.recipe?.title ?? '');
+    final e = widget.existingEntry;
+    _titleCtrl = TextEditingController(text: e?.recipeTitle ?? widget.recipe?.title ?? '');
+    _notesCtrl = TextEditingController(text: e?.notes ?? '');
+    _rating = e?.rating ?? 0;
+    _photoPath = e?.photoPath;
   }
 
   @override
@@ -285,16 +318,25 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
   Future<void> _save() async {
     if (_titleCtrl.text.trim().isEmpty) return;
     setState(() => _saving = true);
-    final entry = JournalEntry(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      recipeTitle: _titleCtrl.text.trim(),
-      category: widget.recipe?.category,
-      cookedAt: DateTime.now(),
-      photoPath: _photoPath,
-      rating: _rating,
-      notes: _notesCtrl.text.trim(),
-    );
-    ref.read(journalProvider.notifier).add(entry);
+    if (_isEdit) {
+      final updated = widget.existingEntry!.copyWith(
+        photoPath: _photoPath,
+        rating: _rating,
+        notes: _notesCtrl.text.trim(),
+      );
+      ref.read(journalProvider.notifier).update(updated);
+    } else {
+      final entry = JournalEntry(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        recipeTitle: _titleCtrl.text.trim(),
+        category: widget.recipe?.category,
+        cookedAt: DateTime.now(),
+        photoPath: _photoPath,
+        rating: _rating,
+        notes: _notesCtrl.text.trim(),
+      );
+      ref.read(journalProvider.notifier).add(entry);
+    }
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -315,7 +357,7 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
             const SizedBox(height: 12),
             Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.darkBorder, borderRadius: BorderRadius.circular(2))),
             const SizedBox(height: 16),
-            const Text('Nouvelle entrée', style: TextStyle(color: AppColors.textDark, fontSize: 17, fontWeight: FontWeight.w700)),
+            Text(_isEdit ? 'Modifier l\'entrée' : 'Nouvelle entrée', style: const TextStyle(color: AppColors.textDark, fontSize: 17, fontWeight: FontWeight.w700)),
             const SizedBox(height: 16),
             Expanded(
               child: ListView(

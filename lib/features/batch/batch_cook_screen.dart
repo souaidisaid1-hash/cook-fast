@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/theme/app_theme.dart';
+import '../../shared/models/journal_entry.dart';
 import '../../shared/models/recipe.dart';
+import '../../shared/providers/app_providers.dart';
 import '../../shared/services/gemini_service.dart';
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
@@ -157,15 +160,15 @@ class _BatchNotifier extends StateNotifier<_BatchCookState> {
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
-class BatchCookScreen extends StatefulWidget {
+class BatchCookScreen extends ConsumerStatefulWidget {
   final List<Recipe> recipes;
   const BatchCookScreen({super.key, required this.recipes});
 
   @override
-  State<BatchCookScreen> createState() => _BatchCookScreenState();
+  ConsumerState<BatchCookScreen> createState() => _BatchCookScreenState();
 }
 
-class _BatchCookScreenState extends State<BatchCookScreen> {
+class _BatchCookScreenState extends ConsumerState<BatchCookScreen> {
   late final _BatchNotifier _notifier;
   late _BatchCookState _s;
   late void Function() _removeListener;
@@ -203,6 +206,24 @@ class _BatchCookScreenState extends State<BatchCookScreen> {
     _notifier.dispose();
     _timelineCtrl.dispose();
     super.dispose();
+  }
+
+  bool _xpGranted = false;
+
+  void _grantXpAndJournal() {
+    if (_xpGranted) return;
+    _xpGranted = true;
+    final now = DateTime.now();
+    for (final recipe in widget.recipes) {
+      final branch = SkillTreeNotifier.branchForCategory(recipe.category);
+      ref.read(skillTreeProvider.notifier).addXp(branch, 25);
+      ref.read(journalProvider.notifier).add(JournalEntry(
+        id: const Uuid().v4(),
+        recipeTitle: recipe.title,
+        category: recipe.category,
+        cookedAt: now,
+      ));
+    }
   }
 
   String _fmt(int seconds) {
@@ -417,7 +438,10 @@ class _BatchCookScreenState extends State<BatchCookScreen> {
             ),
             isLast
                 ? GestureDetector(
-                    onTap: () => context.pop(),
+                    onTap: () {
+                      _grantXpAndJournal();
+                      context.pop();
+                    },
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(color: AppColors.green, borderRadius: BorderRadius.circular(14)),
@@ -504,7 +528,10 @@ class _BatchCookScreenState extends State<BatchCookScreen> {
             Text('${widget.recipes.length} recettes cuisinées', style: const TextStyle(color: AppColors.textDarkSecondary, fontSize: 15)),
             const SizedBox(height: 32),
             ElevatedButton(
-              onPressed: () => context.pop(),
+              onPressed: () {
+                _grantXpAndJournal();
+                context.pop();
+              },
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
               child: const Text('Retour'),
             ),

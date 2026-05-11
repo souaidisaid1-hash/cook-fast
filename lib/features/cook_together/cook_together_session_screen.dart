@@ -1,8 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/theme/app_theme.dart';
+import '../../shared/models/journal_entry.dart';
 import '../../shared/models/recipe.dart';
+import '../../shared/providers/app_providers.dart';
 import '../../shared/services/supabase_service.dart';
 
 // ─── Args ─────────────────────────────────────────────────────────────────────
@@ -29,15 +33,15 @@ class CookTogetherArgs {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-class CookTogetherSessionScreen extends StatefulWidget {
+class CookTogetherSessionScreen extends ConsumerStatefulWidget {
   final CookTogetherArgs args;
   const CookTogetherSessionScreen({super.key, required this.args});
 
   @override
-  State<CookTogetherSessionScreen> createState() => _State();
+  ConsumerState<CookTogetherSessionScreen> createState() => _State();
 }
 
-class _State extends State<CookTogetherSessionScreen> {
+class _State extends ConsumerState<CookTogetherSessionScreen> {
   int _currentStep = 0;
   List<Map<String, dynamic>> _lastReactions = [];
   _FloatingReaction? _activeReaction;
@@ -275,6 +279,13 @@ class _State extends State<CookTogetherSessionScreen> {
           if (isLast)
             GestureDetector(
               onTap: () async {
+                ref.read(journalProvider.notifier).add(JournalEntry(
+                  id: const Uuid().v4(),
+                  recipeTitle: widget.args.recipe.title,
+                  category: widget.args.recipe.category,
+                  cookedAt: DateTime.now(),
+                  notes: 'Cuisiné avec ${widget.args.participantName} 👥',
+                ));
                 if (widget.args.isHost) await SupabaseService.endSession(widget.args.sessionId);
                 if (mounted) context.pop();
               },
@@ -288,6 +299,7 @@ class _State extends State<CookTogetherSessionScreen> {
           else
             _navBtn(Icons.chevron_right, 'Suiv.', false,
                 _currentStep < widget.args.recipe.steps.length - 1, () => _goTo(_currentStep + 1)),
+
         ],
       ),
     );

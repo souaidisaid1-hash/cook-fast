@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/family_member.dart';
 import '../../shared/providers/app_providers.dart';
@@ -21,6 +22,8 @@ class FamilyProfilesScreen extends ConsumerWidget {
     final isDark = ref.watch(themeProvider);
     final members = ref.watch(familyProfilesProvider);
     final notifier = ref.read(familyProfilesProvider.notifier);
+    final isPremium = ref.watch(premiumProvider);
+    final maxMembers = isPremium ? 5 : 1;
     final bg = isDark ? AppColors.darkBg : const Color(0xFFF5F2EE);
     final textColor = isDark ? AppColors.textDark : AppColors.textLight;
 
@@ -89,11 +92,11 @@ class FamilyProfilesScreen extends ConsumerWidget {
           ),
         ],
       ),
-      bottomNavigationBar: members.length < 5
-          ? SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: GestureDetector(
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: members.length < maxMembers
+              ? GestureDetector(
                   onTap: () => _openSheet(context, ref),
                   child: Container(
                     width: double.infinity,
@@ -112,10 +115,30 @@ class FamilyProfilesScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                ),
-              ),
-            )
-          : null,
+                )
+              : !isPremium
+                  ? GestureDetector(
+                      onTap: () => context.push('/premium'),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFFF8C00)]),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text('👑', style: TextStyle(fontSize: 16)),
+                            SizedBox(width: 8),
+                            Text('Passer Premium — jusqu\'à 5 profils', style: TextStyle(color: Colors.black87, fontSize: 14, fontWeight: FontWeight.w700)),
+                          ],
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+        ),
+      ),
     );
   }
 

@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:speech_to_text/speech_to_text.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/theme/app_theme.dart';
+import '../../shared/models/journal_entry.dart';
 import '../../shared/models/recipe.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/services/gemini_service.dart';
@@ -633,6 +635,12 @@ class _CookModeScreenState extends ConsumerState<CookModeScreen> {
     void grantXp() {
       final branch = SkillTreeNotifier.branchForCategory(widget.recipe.category);
       ref.read(skillTreeProvider.notifier).addXp(branch, 25);
+      ref.read(journalProvider.notifier).add(JournalEntry(
+        id: const Uuid().v4(),
+        recipeTitle: widget.recipe.title,
+        category: widget.recipe.category,
+        cookedAt: DateTime.now(),
+      ));
     }
 
     return Padding(

@@ -397,6 +397,11 @@ class JournalNotifier extends StateNotifier<List<JournalEntry>> {
     _save();
   }
 
+  void update(JournalEntry entry) {
+    state = state.map((e) => e.id == entry.id ? entry : e).toList();
+    _save();
+  }
+
   void remove(String id) {
     state = state.where((e) => e.id != id).toList();
     _save();
